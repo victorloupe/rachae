@@ -81,6 +81,19 @@ async function logout() {
 // ============================================================
 let perfilUsuarioAtual = null;
 
+// Escapa texto vindo do usuário (nome, nome de conta, etc.) antes de inserir
+// em innerHTML — evita que alguém cadastre um nome tipo "<img src=x
+// onerror=...>" e execute script na tela de outro morador (XSS armazenado).
+function escapeHtml(texto) {
+  if (texto === null || texto === undefined) return "";
+  return String(texto)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function calcularIniciais(nome) {
   if (!nome) return "U";
   const partes = nome.trim().replace(/\s*\([^)]*\)/g, "").split(/\s+/).filter(Boolean);
@@ -163,7 +176,10 @@ function atribuirCoresMoradores(ids) {
 }
 
 function gerarAvatarHtml(nome, id, tamanho = 32, corForcada = null) {
-  const iniciais = calcularIniciais(nome);
+  // As iniciais são derivadas do próprio nome (ex: primeira letra), então um
+  // nome tipo "<img src=x onerror=...>" viraria iniciais como "<i" — por
+  // isso escapa aqui também, não só o nome completo em outros lugares.
+  const iniciais = escapeHtml(calcularIniciais(nome));
   const cor = corForcada || gerarCorAvatar(id || nome || "");
   const fonte = Math.max(10, Math.round(tamanho * 0.36));
   return `<span class="avatar-morador" style="width:${tamanho}px; height:${tamanho}px; min-width:${tamanho}px; background:${cor}; font-size:${fonte}px;">${iniciais}</span>`;
@@ -265,9 +281,9 @@ function atualizarHeaderUsuarioUI(perfil) {
         <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
       </svg>
     </button>
-    <button type="button" class="btn-usuario-topo" id="btn-usuario-topo" onclick="abrirModalPerfil()" title="${perfil.nome} (clique para editar perfil ou sair)">
-      <span class="avatar-topo" id="avatar-topo">${iniciais}</span>
-      <span class="nome-topo" id="nome-topo">${primeiroNome}</span>
+    <button type="button" class="btn-usuario-topo" id="btn-usuario-topo" onclick="abrirModalPerfil()" title="${escapeHtml(perfil.nome)} (clique para editar perfil ou sair)">
+      <span class="avatar-topo" id="avatar-topo">${escapeHtml(iniciais)}</span>
+      <span class="nome-topo" id="nome-topo">${escapeHtml(primeiroNome)}</span>
       <svg class="chevron-topo" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
         <polyline points="6 9 12 15 18 9"></polyline>
       </svg>
@@ -691,8 +707,12 @@ function mostrarToast(mensagem, tipo = "sucesso") {
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
       <polyline points="20 6 9 17 4 12"/>
     </svg>
-    <span>${mensagem}</span>
+    <span></span>
   `;
+  // Usa textContent (não innerHTML) pro texto da mensagem: ela quase sempre
+  // inclui algo digitado por alguém (nome de morador, de conta etc.), então
+  // isso evita que HTML/script disfarçado de nome execute no toast.
+  toast.querySelector("span").textContent = mensagem;
 
   container.appendChild(toast);
 

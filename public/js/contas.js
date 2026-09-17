@@ -133,7 +133,7 @@ function preencherSelectsMoradores() {
     listaMembrosCasa.length === 0
       ? `<option value="">Nenhum morador cadastrado</option>`
       : `<option value="">Selecione o morador...</option>` +
-        listaMembrosCasa.map((m) => `<option value="${m.usuario_id}">${m.nome}</option>`).join("");
+        listaMembrosCasa.map((m) => `<option value="${m.usuario_id}">${escapeHtml(m.nome)}</option>`).join("");
 
   if (selectNovo) selectNovo.innerHTML = optionsHtml;
   if (selectEdit) selectEdit.innerHTML = optionsHtml;
@@ -213,7 +213,7 @@ function renderizarInputsPercentual(containerId, totalId, valoresIniciais = {}) 
       const valorInicial = valorSalvo !== undefined ? valorSalvo : restante;
       return `
         <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:6px;">
-          <span style="font-size:13px;">${m.nome}</span>
+          <span style="font-size:13px;">${escapeHtml(m.nome)}</span>
           <input type="number" min="0" max="100" step="0.1" data-usuario-id="${m.usuario_id}" class="input-percentual-morador" value="${valorInicial}" style="width:80px; margin:0; padding:6px 8px; font-size:13px;" />
         </div>
       `;
@@ -372,7 +372,7 @@ function renderizarContasNaTela(contas, animar = false) {
         return `
       <div class="linha">
         <div>
-          <strong>${c.nome}</strong>${tagCategoria}${tagPrivada}${tagInicio}${tagParcela}<br/>
+          <strong>${escapeHtml(c.nome)}</strong>${tagCategoria}${tagPrivada}${tagInicio}${tagParcela}<br/>
           <span class="texto-suave">
             ${formatarMoeda(c.valor_padrao)}
             ${c.tipo_valor === "variavel" ? "(variável)" : ""}

@@ -177,7 +177,7 @@ function atualizarOpcoesFiltroMorador() {
 
   seletor.innerHTML =
     `<option value="todos">Todos os moradores</option>` +
-    opcoes.map(([id, nome]) => `<option value="${id}">${nome}${id === usuarioAtualId ? " (você)" : ""}</option>`).join("");
+    opcoes.map(([id, nome]) => `<option value="${id}">${escapeHtml(nome)}${id === usuarioAtualId ? " (você)" : ""}</option>`).join("");
 
   // Mantém a seleção anterior se a pessoa ainda estiver na lista deste mês
   if (moradoresMap.has(valorAtual) || valorAtual === "todos") {
@@ -916,7 +916,7 @@ function renderizarCiclosNaTela(animar = false) {
     html += `
       <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px; margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px solid var(--cor-borda);">
         <h3 style="margin: 0; font-size: 15px; display: flex; align-items: center; flex-wrap: wrap; gap: 4px;">
-          <span>${conta.nome} — ${formatarMoeda(ciclo.valor_total)}</span>
+          <span>${escapeHtml(conta.nome)} — ${formatarMoeda(ciclo.valor_total)}</span>
           ${badgeCategoria}
           ${badgeIndividual}
           ${badgeParcela}
@@ -943,7 +943,7 @@ function renderizarCiclosNaTela(animar = false) {
             <div class="linha-com-avatar">
               ${gerarAvatarHtml(c.profiles ? c.profiles.nome : "Morador", c.usuario_id, 32, mapaCoresMoradores[c.usuario_id])}
               <div>
-                <strong>${c.profiles ? c.profiles.nome : "Morador"}${isEu ? " (você)" : ""}</strong><br/>
+                <strong>${escapeHtml(c.profiles ? c.profiles.nome : "Morador")}${isEu ? " (você)" : ""}</strong><br/>
                 <span class="texto-suave">${formatarMoeda(c.valor)}</span>
               </div>
             </div>
@@ -973,7 +973,7 @@ function renderizarCiclosNaTela(animar = false) {
                     <path d="M17 17h.01"></path>
                   </svg>
                 </button>
-                <button class="btn-icone btn-icone-whatsapp" onclick="enviarCobrancaWhatsApp('${c.id}', '${conta.nome}', ${c.status === 'pago'})" title="${c.status === 'pago' ? 'Avisar recebimento no WhatsApp' : 'Pedir e cobrar no WhatsApp'}" aria-label="WhatsApp">
+                <button class="btn-icone btn-icone-whatsapp" onclick="enviarCobrancaWhatsApp('${c.id}', '${encodeURIComponent(conta.nome)}', ${c.status === 'pago'})" title="${c.status === 'pago' ? 'Avisar recebimento no WhatsApp' : 'Pedir e cobrar no WhatsApp'}" aria-label="WhatsApp">
                   <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
                   </svg>
@@ -1441,7 +1441,7 @@ async function ajustarValorCiclo(cicloId, nomeContaEnc, valorAtual, contaId = nu
           <line x1="12" y1="16" x2="12.01" y2="16"></line>
         </svg>
       </div>
-      <h3>Ajustar valor: ${nomeConta}</h3>
+      <h3>Ajustar valor: ${escapeHtml(nomeConta)}</h3>
       <p style="margin-bottom: 12px;">Altere o valor desta fatura no mês. A divisão será recalculada automaticamente.</p>
       <div style="margin-bottom: 16px; text-align: left;">
         <label for="input-ajuste-valor" style="margin-top: 0;">Valor total da fatura (R$)</label>
@@ -1703,7 +1703,7 @@ async function abrirModalPix(cobrancaId) {
           <span style="font-size:11px; color:var(--cor-destaque); font-weight:600;">Com valor exato</span>
         </div>
         <div class="copia-cola" style="max-height:50px; overflow-y:auto; word-break:break-all; font-size:11px;">${payloadPix}</div>
-        <button type="button" class="secundario pequeno" style="width:100%; margin-top:8px !important;" onclick="copiarPix('${payloadPix}')">
+        <button type="button" class="secundario pequeno" style="width:100%; margin-top:8px !important;" onclick="copiarPix('${encodeURIComponent(payloadPix)}')">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle; margin-right:4px;">
             <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
             <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
@@ -1715,9 +1715,9 @@ async function abrirModalPix(cobrancaId) {
   } else if (chaveDestino) {
     htmlPix += `
       <div style="background:var(--cor-fundo); border:1px solid var(--cor-borda); border-radius:8px; padding:10px; margin-bottom:10px; text-align:left;">
-        <span style="font-size:11px; font-weight:700; color:var(--cor-texto-suave); text-transform:uppercase; display:block;">Chave Pix (${nomeBeneficiario}${bancoBeneficiario ? " · " + bancoBeneficiario : ""})</span>
-        <div style="font-size:15px; font-weight:700; color:var(--cor-texto); margin:4px 0 6px;">${chaveDestino}</div>
-        <button type="button" class="secundario pequeno" style="width:100%; margin:0 !important;" onclick="copiarPix('${chaveDestino}')">
+        <span style="font-size:11px; font-weight:700; color:var(--cor-texto-suave); text-transform:uppercase; display:block;">Chave Pix (${escapeHtml(nomeBeneficiario)}${bancoBeneficiario ? " · " + escapeHtml(bancoBeneficiario) : ""})</span>
+        <div style="font-size:15px; font-weight:700; color:var(--cor-texto); margin:4px 0 6px;">${escapeHtml(chaveDestino)}</div>
+        <button type="button" class="secundario pequeno" style="width:100%; margin:0 !important;" onclick="copiarPix('${encodeURIComponent(chaveDestino)}')">
           Copiar Chave Pix
         </button>
       </div>
@@ -1809,7 +1809,9 @@ async function enviarCobrancaWhatsApp(cobrancaId, nomeContaOpcional = null, jaPa
   const nomeMorador = cobranca.profiles ? cobranca.profiles.nome : "Morador";
   const mesFormatado = `${MESES[dataSelecionada.getMonth()]}/${dataSelecionada.getFullYear()}`;
   const valorFormatado = formatarMoeda(cobranca.valor);
-  const nomeConta = nomeContaOpcional || "da casa";
+  // nomeContaOpcional chega como URI-encoded (ver renderizarCiclosNaTela) pra
+  // não quebrar o atributo onclick se o nome da conta tiver aspas.
+  const nomeConta = (nomeContaOpcional ? decodeURIComponent(nomeContaOpcional) : null) || "da casa";
 
   const estaPago = jaPago || cobranca.status === "pago";
 
@@ -2158,7 +2160,7 @@ function abrirCentralLembretes() {
             <div class="linha-com-avatar">
               ${gerarAvatarHtml(info.nome, uId, 32, mapaCoresMoradores[uId])}
               <div>
-                <strong>${info.nome}</strong><br/>
+                <strong>${escapeHtml(info.nome)}</strong><br/>
                 <span class="texto-suave">${formatarMoeda(info.total)} · ${info.atrasado ? "Atrasado" : "Pendente"}</span>
               </div>
             </div>
@@ -2205,7 +2207,8 @@ if (!window._modalPixKeydownBound) {
   });
 }
 
-function copiarPix(codigo) {
+function copiarPix(codigoEnc) {
+  const codigo = decodeURIComponent(codigoEnc);
   navigator.clipboard.writeText(codigo);
   mostrarToast("Código Pix copiado!");
 

@@ -80,7 +80,7 @@ async function carregarMinhasCasas(usuarioId) {
         return `
           <div class="linha">
             <div>
-              <strong>${c.nome}</strong>${numTexto}<br/>
+              <strong>${escapeHtml(c.nome)}</strong>${numTexto}<br/>
               <span class="texto-suave">${papel === "admin" ? "Administrador" : "Morador"}</span>
             </div>
             <button class="pequeno" onclick="irParaCasa('${c.id}', '${nomeEsc}', '${numEsc}', '${papelEsc}')">Abrir</button>

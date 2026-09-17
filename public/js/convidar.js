@@ -311,7 +311,7 @@ function renderizarMoradoresNaTela(membros, animar = false) {
           <div class="linha-com-avatar">
             ${gerarAvatarHtml(nome, m.usuario_id, 32, mapaCoresMoradores[m.usuario_id])}
             <div>
-              <strong>${nome}${m.usuario_id === usuarioIdAtual ? " (você)" : ""}</strong><br/>
+              <strong>${escapeHtml(nome)}${m.usuario_id === usuarioIdAtual ? " (você)" : ""}</strong><br/>
               <span class="texto-suave">
                 ${m.papel === "admin" ? "Administrador" : "Morador"}
                 ${telefone ? `· ${formatarTelefone(telefone)}` : ""}
@@ -501,7 +501,7 @@ async function removerMorador(membroId, nomeCodificado, usuarioId) {
   // Antes de remover, verifica se essa pessoa ainda tem cobranças em
   // aberto na casa (pendentes ou atrasadas) — o admin precisa saber
   // disso antes de tirar o acesso dela.
-  let mensagemAviso = `Tem certeza que deseja remover ${nome} desta casa? Essa pessoa perderá o acesso às contas e cobranças.`;
+  let mensagemAviso = `Tem certeza que deseja remover ${escapeHtml(nome)} desta casa? Essa pessoa perderá o acesso às contas e cobranças.`;
 
   try {
     const { data: contasCasa } = await supabaseClient
@@ -528,7 +528,7 @@ async function removerMorador(membroId, nomeCodificado, usuarioId) {
         const totalPendente = (pendentes || []).reduce((acc, c) => acc + Number(c.valor || 0), 0);
 
         if (totalPendente > 0) {
-          mensagemAviso = `<strong>${nome} ainda tem ${formatarMoeda(totalPendente)} em cobranças pendentes/atrasadas nesta casa.</strong><br/><br/>Remover agora não apaga essa dívida do histórico, mas ela perde o acesso ao app pra acompanhar ou anexar comprovante. Tem certeza que quer remover mesmo assim?`;
+          mensagemAviso = `<strong>${escapeHtml(nome)} ainda tem ${formatarMoeda(totalPendente)} em cobranças pendentes/atrasadas nesta casa.</strong><br/><br/>Remover agora não apaga essa dívida do histórico, mas ela perde o acesso ao app pra acompanhar ou anexar comprovante. Tem certeza que quer remover mesmo assim?`;
         }
       }
     }
@@ -694,7 +694,7 @@ async function abrirExtratoMorador(usuarioId, nomeCodificado) {
     if (error) throw error;
 
     if (!cobrancas || cobrancas.length === 0) {
-      lista.innerHTML = `<p class="texto-suave" style="text-align:center; padding: 16px 0;">${nome} ainda não tem cobranças registradas.</p>`;
+      lista.innerHTML = `<p class="texto-suave" style="text-align:center; padding: 16px 0;">${escapeHtml(nome)} ainda não tem cobranças registradas.</p>`;
       return;
     }
 
@@ -729,7 +729,7 @@ async function abrirExtratoMorador(usuarioId, nomeCodificado) {
         return `
           <div class="linha" style="padding: 8px 0;">
             <div>
-              <strong style="font-size: 13.5px;">${l.conta_nome}</strong><br/>
+              <strong style="font-size: 13.5px;">${escapeHtml(l.conta_nome)}</strong><br/>
               <span class="texto-suave" style="font-size: 12px;">${mesTexto}</span>
             </div>
             <div style="text-align: right;">
