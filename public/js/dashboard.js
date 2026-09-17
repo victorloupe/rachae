@@ -144,12 +144,31 @@ function configurarFiltrosCobrancas() {
   const botoes = container.querySelectorAll(".btn-filtro");
   botoes.forEach((btn) => {
     btn.addEventListener("click", () => {
-      botoes.forEach((b) => b.classList.remove("ativo"));
-      btn.classList.add("ativo");
-      filtroAtual = btn.dataset.filtro || "todos";
-      renderizarCiclosNaTela(true);
+      filtrarCobrancas(btn.dataset.filtro || "todos");
     });
   });
+}
+
+function filtrarCobrancas(tipo) {
+  filtroAtual = tipo || "todos";
+  const container = document.getElementById("filtros-cobrancas");
+  if (container) {
+    const botoes = container.querySelectorAll(".btn-filtro");
+    botoes.forEach((b) => {
+      if (b.dataset.filtro === filtroAtual) {
+        b.classList.add("ativo");
+      } else {
+        b.classList.remove("ativo");
+      }
+    });
+  }
+  renderizarCiclosNaTela(true);
+
+  // Rola suavemente até o detalhamento caso o usuário tenha acionado pelo card de alerta
+  const secaoDetalhe = document.querySelector(".cabecalho-secao-detalhe");
+  if (secaoDetalhe) {
+    secaoDetalhe.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 }
 
 function primeiroDiaDoMes(data = dataSelecionada) {
@@ -1681,6 +1700,7 @@ function copiarPix(codigo) {
 
 // Exposição explícita para o escopo global (window)
 window.inicializarDashboard = inicializarDashboard;
+window.filtrarCobrancas = filtrarCobrancas;
 window.abrirModalPix = abrirModalPix;
 window.fecharModalPix = fecharModalPix;
 window.copiarPix = copiarPix;
