@@ -41,7 +41,7 @@ async function inicializarDashboard() {
   configurarAcoesDashboard();
   configurarModalPixEventos();
 
-  if (window.Animacoes) {
+  if (window.Animacoes && !window.InstantNav?.emNavegacao) {
     window.Animacoes.animarEntradaPagina(".card-casa-topo, .seletor-mes, .card-metrica, #container-alerta-pessoal, .card");
   }
 
@@ -147,7 +147,7 @@ function configurarFiltrosCobrancas() {
       botoes.forEach((b) => b.classList.remove("ativo"));
       btn.classList.add("ativo");
       filtroAtual = btn.dataset.filtro || "todos";
-      renderizarCiclosNaTela();
+      renderizarCiclosNaTela(true);
     });
   });
 }
@@ -286,7 +286,7 @@ async function carregarCiclosDoMes() {
           cacheObj.contadores.totalPagas
         );
         atualizarBannerPessoal(cacheObj.banner?.cobrancaPendenteEu, cacheObj.banner?.totalPendenteEu || 0);
-        renderizarCiclosNaTela();
+        renderizarCiclosNaTela(false);
       }
     } catch (e) {
       console.warn("Erro ao ler cache do dashboard:", e);
@@ -468,17 +468,22 @@ async function carregarCiclosDoMes() {
   dadosCiclosCarregados = novosDadosCiclos;
 
   // Atualiza cache em sessionStorage para renderizar em 0ms no próximo acesso
-  sessionStorage.setItem(cacheKey, JSON.stringify({
+  const novoCacheJson = JSON.stringify({
     dadosCiclosCarregados: novosDadosCiclos,
     metricas: metricasCalculadas,
     contadores: { totalCobrancas, totalPendentes, totalPagas },
     banner: { cobrancaPendenteEu, totalPendenteEu }
-  }));
+  });
 
-  atualizarMetricas(metricasCalculadas);
-  atualizarContadoresFiltros(totalCobrancas, totalPendentes, totalPagas);
-  atualizarBannerPessoal(cobrancaPendenteEu, totalPendenteEu);
-  renderizarCiclosNaTela();
+  const dadosMudaram = !temCache || dadosEmCache !== novoCacheJson;
+  sessionStorage.setItem(cacheKey, novoCacheJson);
+
+  if (dadosMudaram) {
+    atualizarMetricas(metricasCalculadas);
+    atualizarContadoresFiltros(totalCobrancas, totalPendentes, totalPagas);
+    atualizarBannerPessoal(cobrancaPendenteEu, totalPendenteEu);
+    renderizarCiclosNaTela(!temCache);
+  }
 }
 
 function atualizarContadoresFiltros(total, pendentes, pagos) {
@@ -521,7 +526,7 @@ function calcularStatusVencimento(cobranca, conta, mesReferencia) {
   return { texto: `Pendente (${diaVenc}/${String(mes).padStart(2, "0")})`, classe: "pendente" };
 }
 
-function renderizarCiclosNaTela() {
+function renderizarCiclosNaTela(animar = false) {
   const container = document.getElementById("lista-ciclos");
   if (!container) return;
 
@@ -654,7 +659,7 @@ function renderizarCiclosNaTela() {
   }
 
   container.innerHTML = html;
-  if (window.Animacoes) {
+  if (animar && window.Animacoes) {
     window.Animacoes.animarListaLinhas("#lista-ciclos .linha");
   }
 }

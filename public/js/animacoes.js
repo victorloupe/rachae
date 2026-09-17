@@ -14,17 +14,19 @@ const Animacoes = (() => {
   function animarEntradaPagina(seletor = ".card-metrica, .card, .card-casa-topo, .seletor-mes") {
     if (!gsapDisponivel() || prefereReducao) return;
 
+    gsap.killTweensOf(seletor);
+
     gsap.fromTo(
       seletor,
       {
         opacity: 0,
-        y: 16,
+        y: 12,
       },
       {
         opacity: 1,
         y: 0,
-        duration: 0.45,
-        stagger: 0.05,
+        duration: 0.35,
+        stagger: 0.04,
         ease: "power2.out",
         clearProps: "transform,opacity",
       }
@@ -32,7 +34,7 @@ const Animacoes = (() => {
   }
 
   // Animação de contador numérico em moeda (estilo Nubank/Revolut)
-  function animarNumeroMoeda(elemento, valorFinal, duracao = 0.7) {
+  function animarNumeroMoeda(elemento, valorFinal, duracao = 0.5) {
     if (!elemento) return;
     const final = Number(valorFinal) || 0;
 
@@ -45,6 +47,13 @@ const Animacoes = (() => {
     const textoAtual = elemento.textContent.replace(/[^\d]/g, "");
     const valorInicial = textoAtual ? Number(textoAtual) / 100 : 0;
 
+    // Se o valor na tela já é exatamente o final, não precisa reanimar!
+    if (Math.abs(valorInicial - final) < 0.01) {
+      elemento.textContent = window.formatarMoeda ? window.formatarMoeda(final) : `R$ ${final.toFixed(2).replace(".", ",")}`;
+      return;
+    }
+
+    gsap.killTweensOf(elemento);
     const contador = { valor: valorInicial };
 
     gsap.to(contador, {
@@ -67,7 +76,7 @@ const Animacoes = (() => {
   }
 
   // Animação de contador fracionário (ex: "1 / 3")
-  function animarNumeroFracionario(elemento, atual, total, duracao = 0.6) {
+  function animarNumeroFracionario(elemento, atual, total, duracao = 0.5) {
     if (!elemento) return;
     const alvoAtual = Number(atual) || 0;
     const alvoTotal = Number(total) || 0;
@@ -77,7 +86,18 @@ const Animacoes = (() => {
       return;
     }
 
-    const contador = { valor: 0 };
+    // Lê valor atual na tela em vez de reiniciar sempre do zero
+    const partes = (elemento.textContent || "").split("/");
+    const valorAtual = partes.length === 2 ? parseInt(partes[0].trim(), 10) : 0;
+
+    if (!isNaN(valorAtual) && valorAtual === alvoAtual && (elemento.textContent || "").includes(String(alvoTotal))) {
+      return; // Já está exibindo exatamente o valor correto!
+    }
+
+    const inicio = isNaN(valorAtual) ? 0 : valorAtual;
+    const contador = { valor: inicio };
+    gsap.killTweensOf(elemento);
+
     gsap.to(contador, {
       valor: alvoAtual,
       duration: duracao,
@@ -92,7 +112,7 @@ const Animacoes = (() => {
   }
 
   // Animação da barra de arrecadação
-  function animarBarraProgresso(elemento, percentual, duracao = 0.7) {
+  function animarBarraProgresso(elemento, percentual, duracao = 0.5) {
     if (!elemento) return;
     const pctClamped = Math.max(0, Math.min(100, Number(percentual) || 0));
     const escala = pctClamped / 100;
@@ -102,6 +122,7 @@ const Animacoes = (() => {
       return;
     }
 
+    gsap.killTweensOf(elemento);
     gsap.to(elemento, {
       scaleX: escala,
       duration: duracao,
@@ -111,7 +132,7 @@ const Animacoes = (() => {
   }
 
   // Animação em cascata (stagger) para listas de linhas
-  function animarListaLinhas(seletorOuElementos, duracao = 0.35) {
+  function animarListaLinhas(seletorOuElementos, duracao = 0.28) {
     if (!gsapDisponivel() || prefereReducao) return;
 
     const itens = typeof seletorOuElementos === "string"
@@ -120,17 +141,19 @@ const Animacoes = (() => {
 
     if (!itens || itens.length === 0) return;
 
+    gsap.killTweensOf(itens);
+
     gsap.fromTo(
       itens,
       {
         opacity: 0,
-        y: 8,
+        y: 6,
       },
       {
         opacity: 1,
         y: 0,
         duration: duracao,
-        stagger: 0.04,
+        stagger: 0.03,
         ease: "power1.out",
         clearProps: "transform,opacity",
       }

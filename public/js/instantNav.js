@@ -190,8 +190,10 @@
 
     const novoMain = document.querySelector("#app-main") || document.querySelector(".container");
     if (novoMain) {
+      novoMain.style.opacity = "0";
+      void novoMain.offsetHeight;
+      novoMain.style.transition = "opacity 0.1s ease";
       novoMain.style.opacity = "1";
-      novoMain.style.transform = "translateY(0)";
     }
 
     // Rola instantaneamente para o topo
@@ -224,11 +226,6 @@
     const camposTel = document.querySelectorAll('input[type="tel"], #telefone');
     if (typeof aplicarMascaraTelefone === "function") {
       camposTel.forEach(aplicarMascaraTelefone);
-    }
-
-    // Animação de entrada sutil
-    if (window.Animacoes) {
-      window.Animacoes.animarEntradaPagina(".card, .card-metrica");
     }
 
     const config = ROTA_SCRIPT_MAP[rotaBase];

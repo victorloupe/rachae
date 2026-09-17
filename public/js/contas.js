@@ -39,7 +39,7 @@ async function inicializarContas() {
   papelUsuario = await obterPapelUsuarioNaCasa(casaId, session.user.id);
   configurarPermissoesInterface();
 
-  if (window.Animacoes) {
+  if (window.Animacoes && !window.InstantNav?.emNavegacao) {
     window.Animacoes.animarEntradaPagina(".card, .card-metrica");
   }
 
@@ -165,7 +165,7 @@ function configurarSeletorDivisao() {
   }
 }
 
-function renderizarContasNaTela(contas) {
+function renderizarContasNaTela(contas, animar = false) {
   const container = document.getElementById("lista-contas");
   if (!container) return;
 
@@ -222,7 +222,7 @@ function renderizarContasNaTela(contas) {
     )
     .join("");
 
-  if (window.Animacoes) {
+  if (animar && window.Animacoes) {
     window.Animacoes.animarListaLinhas("#lista-contas .linha");
   }
 }
@@ -249,7 +249,7 @@ async function carregarContas() {
       if (totalEl) totalEl.textContent = formatarMoeda(totalSalvo);
       if (mediaEl) mediaEl.textContent = `${formatarMoeda(totalSalvo / qtdSalva)} por morador (${qtdSalva} morador${qtdSalva === 1 ? "" : "es"})`;
 
-      renderizarContasNaTela(parsed);
+      renderizarContasNaTela(parsed, false);
     } catch (e) {}
   }
 
@@ -287,24 +287,29 @@ async function carregarContas() {
   const mediaPorMorador = totalFixo / qtdMoradores;
 
   // Atualiza cache em sessionStorage
-  sessionStorage.setItem(cacheKey, JSON.stringify(listaContasAtuais));
+  const novoContasJson = JSON.stringify(listaContasAtuais);
+  const dadosMudaram = !cachedContas || cachedContas !== novoContasJson;
+
+  sessionStorage.setItem(cacheKey, novoContasJson);
   sessionStorage.setItem(cacheTotalKey, String(totalFixo));
   sessionStorage.setItem(cacheQtdKey, String(qtdMoradores));
 
-  const totalEl = document.getElementById("orcamento-total");
-  const mediaEl = document.getElementById("orcamento-media");
-  if (totalEl) {
-    if (window.Animacoes && !cachedContas) {
-      window.Animacoes.animarNumeroMoeda(totalEl, totalFixo);
-    } else {
-      totalEl.textContent = formatarMoeda(totalFixo);
+  if (dadosMudaram) {
+    const totalEl = document.getElementById("orcamento-total");
+    const mediaEl = document.getElementById("orcamento-media");
+    if (totalEl) {
+      if (window.Animacoes && !cachedContas) {
+        window.Animacoes.animarNumeroMoeda(totalEl, totalFixo);
+      } else {
+        totalEl.textContent = formatarMoeda(totalFixo);
+      }
     }
-  }
-  if (mediaEl) {
-    mediaEl.textContent = `${formatarMoeda(mediaPorMorador)} por morador (${qtdMoradores} morador${qtdMoradores === 1 ? "" : "es"})`;
-  }
+    if (mediaEl) {
+      mediaEl.textContent = `${formatarMoeda(mediaPorMorador)} por morador (${qtdMoradores} morador${qtdMoradores === 1 ? "" : "es"})`;
+    }
 
-  renderizarContasNaTela(listaContasAtuais);
+    renderizarContasNaTela(listaContasAtuais, !cachedContas);
+  }
 }
 
 function textoFormaDivisao(conta) {

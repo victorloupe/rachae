@@ -23,7 +23,7 @@ async function inicializarConvidar() {
   configurarPermissoesInterface();
   configurarEventosConvidar();
 
-  if (window.Animacoes) {
+  if (window.Animacoes && !window.InstantNav?.emNavegacao) {
     window.Animacoes.animarEntradaPagina(".card, .card-casa-topo");
   }
 
@@ -189,7 +189,7 @@ function renderizarConvite(convite, container) {
   `;
 }
 
-function renderizarMoradoresNaTela(membros) {
+function renderizarMoradoresNaTela(membros, animar = false) {
   const container = document.getElementById("lista-moradores");
   if (!container) return;
 
@@ -253,7 +253,7 @@ function renderizarMoradoresNaTela(membros) {
     })
     .join("");
 
-  if (window.Animacoes) {
+  if (animar && window.Animacoes) {
     window.Animacoes.animarListaLinhas("#lista-moradores .linha");
   }
 }
@@ -274,7 +274,7 @@ async function carregarMoradores() {
       if (statusTopo) {
         statusTopo.textContent = `${total} morador${total === 1 ? "" : "es"}`;
       }
-      renderizarMoradoresNaTela(membros);
+      renderizarMoradoresNaTela(membros, false);
     } catch (e) {}
   }
 
@@ -296,8 +296,14 @@ async function carregarMoradores() {
     statusTopo.textContent = `${total} morador${total === 1 ? "" : "es"}`;
   }
 
-  sessionStorage.setItem(cacheKey, JSON.stringify(membros || []));
-  renderizarMoradoresNaTela(membros || []);
+  const novoMoradoresJson = JSON.stringify(membros || []);
+  const dadosMudaram = !cachedMoradores || cachedMoradores !== novoMoradoresJson;
+
+  sessionStorage.setItem(cacheKey, novoMoradoresJson);
+
+  if (dadosMudaram) {
+    renderizarMoradoresNaTela(membros || [], !cachedMoradores);
+  }
 }
 
 async function removerMorador(membroId, nomeCodificado) {
