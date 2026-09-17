@@ -950,6 +950,17 @@ function renderizarCiclosNaTela(animar = false) {
             <div style="text-align:right; display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
               <span class="badge ${statusInfo.classe}">${statusInfo.texto}</span>
               <div class="acoes-linha" style="justify-content:flex-end;">
+                ${
+                  c.comprovante_url
+                    ? `
+                <button class="btn-icone" onclick="verComprovante('${c.comprovante_url}')" title="Ver comprovante anexado" aria-label="Ver comprovante">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
+                  </svg>
+                </button>
+                `
+                    : ""
+                }
                 <button class="btn-icone ${c.status === 'pago' ? 'btn-icone-pix-pago' : 'btn-icone-pix-pendente'}" onclick="abrirModalPix('${c.id}')" title="${c.status === 'pago' ? 'Pix pago (ver dados)' : 'Pix pendente (ver QR Code e pagar)'}" aria-label="Pix">
                   <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <rect x="3" y="3" width="7" height="7" rx="1.5"></rect>
