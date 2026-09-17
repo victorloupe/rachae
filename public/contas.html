@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rachaê — Contas fixas</title>
+  <link rel="icon" type="image/jpeg" href="assets/icon.jpg" />
+  <meta name="theme-color" content="#0f172a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="apple-touch-icon" href="assets/icon.jpg" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="stylesheet" href="css/style.css?v=6" />
+</head>
+<body>
+  <header class="topo">
+    <div class="marca">
+      <img src="assets/icon.jpg" alt="Rachaê" class="marca-img" />
+      <h1>Rachaê</h1>
+    </div>
+    <div class="topo-acoes-usuario" id="topo-acoes-usuario">
+      <button type="button" class="btn-usuario-topo" id="btn-usuario-topo" onclick="abrirModalPerfil()" title="Meu perfil (clique para editar ou sair)">
+        <span class="avatar-topo" id="avatar-topo">U</span>
+        <span class="nome-topo" id="nome-topo">Usuário</span>
+        <svg class="chevron-topo" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="app-main">
+    <div class="container">
+    <p>
+      <a class="link" href="casa.html">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="15 18 9 12 15 6"/>
+        </svg>
+        Trocar de casa
+      </a>
+    </p>
+
+    <!-- Card de Orçamento Fixo Previsto -->
+    <div class="card-metrica" style="margin-bottom: 16px;">
+      <span class="titulo-metrica">Orçamento Fixo Mensal Estimado</span>
+      <span class="valor-metrica" id="orcamento-total">R$ 0,00</span>
+      <span class="sub-metrica" id="orcamento-media">R$ 0,00 por morador</span>
+    </div>
+
+    <div class="card">
+      <h2>Contas fixas da casa</h2>
+      <div id="lista-contas"><p class="texto-suave">Carregando...</p></div>
+    </div>
+
+    <!-- Card Configuração de Chave Pix da Casa -->
+    <div class="card" id="card-pix-casa">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+        <h2 style="margin: 0;">Chave Pix da Casa</h2>
+        <span id="badge-pix-tipo" class="badge pendente" style="display: none;"></span>
+      </div>
+      <p class="texto-suave" style="margin: 0 0 14px;">
+        Esta chave será utilizada para gerar os códigos Pix e pagamentos de todas as contas da casa.
+      </p>
+
+      <form id="form-pix-casa">
+        <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 8px;">
+          <div>
+            <label for="pix-tipo">Tipo</label>
+            <select id="pix-tipo">
+              <option value="telefone">Telefone</option>
+              <option value="cpf">CPF</option>
+              <option value="cnpj">CNPJ</option>
+              <option value="email">E-mail</option>
+              <option value="aleatoria">Aleatória</option>
+            </select>
+          </div>
+          <div>
+            <label for="pix-chave">Chave Pix</label>
+            <input type="text" id="pix-chave" placeholder="Digite a chave Pix" required />
+          </div>
+        </div>
+
+        <button type="submit" id="btn-salvar-pix" style="margin-top: 12px;">Salvar Chave Pix</button>
+        <p id="msg-pix-casa"></p>
+      </form>
+
+      <div id="visualizacao-pix-morador" style="display: none; background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid var(--cor-borda);">
+        <span style="font-size: 12px; font-weight: 600; color: var(--cor-texto-suave); text-transform: uppercase; letter-spacing: 0.04em; display: block;">Chave Pix Oficial</span>
+        <div id="txt-pix-morador" style="font-size: 16px; font-weight: 700; color: var(--cor-texto); margin-top: 4px;">Nenhuma chave configurada</div>
+      </div>
+    </div>
+
+    <div id="aviso-permissao-contas" style="display:none;" class="aviso-permissao">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="12" y1="8" x2="12" y2="12"/>
+        <line x1="12" y1="16" x2="12.01" y2="16"/>
+      </svg>
+      <div>
+        <strong>Apenas para Administrador</strong><br/>
+        Você é morador nesta casa. Apenas o administrador pode cadastrar novas contas ou editá-las.
+      </div>
+    </div>
+
+    <div class="card" id="card-nova-conta">
+      <h2>Nova conta fixa</h2>
+      <form id="form-nova-conta">
+        <label for="nome">Nome da conta</label>
+        <input type="text" id="nome" placeholder="Ex: Aluguel, Luz, Internet" required />
+
+        <label for="valor">Valor (R$)</label>
+        <input type="number" id="valor" step="0.01" min="0" required placeholder="0.00" />
+
+        <label for="tipo-valor">O valor muda todo mês?</label>
+        <select id="tipo-valor">
+          <option value="fixo">Não, é sempre o mesmo valor</option>
+          <option value="variavel">Sim, varia mês a mês (ex: luz, água)</option>
+        </select>
+
+        <label for="dia-vencimento">Dia do vencimento</label>
+        <input type="number" id="dia-vencimento" min="1" max="28" required placeholder="Ex: 10" />
+
+        <label for="quando-iniciar">Quando começa a cobrança?</label>
+        <select id="quando-iniciar">
+          <option value="atual" id="opt-mes-atual">A partir deste mês</option>
+          <option value="proximo" id="opt-mes-proximo">A partir do próximo mês</option>
+          <option value="personalizado">Escolher outro mês...</option>
+        </select>
+        <div id="bloco-mes-inicio-personalizado" style="display:none; margin-top:8px;">
+          <label for="mes-inicio">Mês de início:</label>
+          <input type="month" id="mes-inicio" />
+        </div>
+
+        <label for="forma-divisao">Como divide entre os moradores?</label>
+        <select id="forma-divisao">
+          <option value="igual">Igual para todos</option>
+          <option value="individual">Apenas um morador específico</option>
+        </select>
+
+        <div id="bloco-morador-especifico" style="display:none; margin-top:10px; background:#f8fafc; padding:10px 12px; border-radius:8px; border:1px solid var(--cor-borda);">
+          <label for="morador-especifico" style="font-weight:600; color:var(--cor-texto);">Quem é o morador responsável?</label>
+          <select id="morador-especifico">
+            <option value="">Carregando moradores...</option>
+          </select>
+          <p class="texto-suave" style="font-size:11px; margin:4px 0 0;">Esta conta será cobrada 100% apenas deste morador, sem ratear com os demais.</p>
+        </div>
+
+        <button type="submit" style="margin-top:12px;">Adicionar conta</button>
+        <p id="msg-nova-conta"></p>
+      </form>
+    </div>
+
+  <!-- Modal de Edição de Conta Fixa -->
+  <div id="modal-editar-conta" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.6); align-items:center; justify-content:center; z-index:999; backdrop-filter:blur(3px);">
+    <div class="card" style="max-width:380px; margin:16px; width:100%; box-shadow:var(--sombra-flutuante);">
+      <h2>Editar Conta Fixa</h2>
+      <form id="form-editar-conta">
+        <input type="hidden" id="edit-id" />
+
+        <label for="edit-nome">Nome da conta</label>
+        <input type="text" id="edit-nome" required />
+
+        <label for="edit-valor">Valor (R$)</label>
+        <input type="number" id="edit-valor" step="0.01" min="0" required />
+
+        <label for="edit-tipo-valor">O valor muda todo mês?</label>
+        <select id="edit-tipo-valor">
+          <option value="fixo">Não, é sempre o mesmo valor</option>
+          <option value="variavel">Sim, varia mês a mês (ex: luz, água)</option>
+        </select>
+
+        <label for="edit-dia-vencimento">Dia do vencimento</label>
+        <input type="number" id="edit-dia-vencimento" min="1" max="28" required />
+
+        <label for="edit-quando-iniciar">Quando começa a cobrança?</label>
+        <select id="edit-quando-iniciar">
+          <option value="atual" id="edit-opt-mes-atual">A partir deste mês</option>
+          <option value="proximo" id="edit-opt-mes-proximo">A partir do próximo mês</option>
+          <option value="personalizado">Escolher outro mês...</option>
+        </select>
+        <div id="edit-bloco-mes-inicio-personalizado" style="display:none; margin-top:8px;">
+          <label for="edit-mes-inicio">Mês de início:</label>
+          <input type="month" id="edit-mes-inicio" />
+        </div>
+
+        <label for="edit-forma-divisao">Como divide entre os moradores?</label>
+        <select id="edit-forma-divisao">
+          <option value="igual">Igual para todos</option>
+          <option value="individual">Apenas um morador específico</option>
+        </select>
+
+        <div id="edit-bloco-morador-especifico" style="display:none; margin-top:10px; background:#f8fafc; padding:10px 12px; border-radius:8px; border:1px solid var(--cor-borda);">
+          <label for="edit-morador-especifico" style="font-weight:600; color:var(--cor-texto);">Quem é o morador responsável?</label>
+          <select id="edit-morador-especifico">
+            <option value="">Carregando moradores...</option>
+          </select>
+          <p class="texto-suave" style="font-size:11px; margin:4px 0 0;">Esta conta será cobrada 100% apenas deste morador, sem ratear com os demais.</p>
+        </div>
+
+        <button type="submit" style="margin-top:12px;">Salvar Alterações</button>
+        <button type="button" class="secundario" onclick="fecharModalEditar()" style="margin-top:8px;">Cancelar</button>
+        <p id="msg-editar-conta"></p>
+      </form>
+    </div>
+  </div>
+  </main>
+
+  <div class="rodape-nav">
+    <a href="dashboard.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="18" y1="20" x2="18" y2="10"/>
+        <line x1="12" y1="20" x2="12" y2="4"/>
+        <line x1="6" y1="20" x2="6" y2="14"/>
+      </svg>
+      <span>Cobranças</span>
+    </a>
+    <a href="contas.html" class="ativo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/>
+        <path d="M8 7h8"/>
+        <path d="M8 11h8"/>
+        <path d="M8 15h5"/>
+      </svg>
+      <span>Contas</span>
+    </a>
+    <a href="convidar.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+        <circle cx="9" cy="7" r="4"/>
+        <line x1="19" y1="8" x2="19" y2="14"/>
+        <line x1="22" y1="11" x2="16" y2="11"/>
+      </svg>
+      <span>Convidar</span>
+    </a>
+  </div>
+
+  <!-- GSAP & Animações -->
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+  <script src="js/animacoes.js"></script>
+
+  <!-- Supabase JS CDN (v2) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/config.js"></script>
+  <script src="js/mockClient.js"></script>
+  <script src="js/supabaseClient.js"></script>
+  <script src="js/instantNav.js"></script>
+  <script src="js/contas.js"></script>
+</body>
+</html>

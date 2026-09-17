@@ -1,0 +1,17 @@
+{
+  "name": "rachae",
+  "version": "1.0.0",
+  "description": "App para república e casa compartilhada: divisão inteligente de contas fixas e cobrança Pix",
+  "main": "server.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/victorloupe/rachae.git"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": ["rachae", "pix", "contas", "republica", "supabase", "pwa"],
+  "author": "",
+  "license": "ISC"
+}

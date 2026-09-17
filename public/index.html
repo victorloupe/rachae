@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rachaê — Entrar</title>
+  <link rel="icon" type="image/jpeg" href="assets/icon.jpg" />
+  <meta name="theme-color" content="#0f172a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="apple-touch-icon" href="assets/icon.jpg" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="stylesheet" href="css/style.css?v=6" />
+</head>
+<body>
+  <div class="tela-auth">
+    <div class="auth-wrapper">
+      <div class="auth-topo">
+        <img src="assets/LogoSite.jpg" alt="Rachaê" class="auth-logo-img" />
+        <p class="auth-subtitulo">Contas fixas da casa, divididas e cobradas sozinhas.</p>
+      </div>
+
+      <!-- Banner se houver convite pendente na URL -->
+      <div id="banner-convite-container"></div>
+
+      <div class="card card-auth">
+        <div class="card-auth-cabecalho">
+          <h2>Bem-vindo de volta</h2>
+          <p>Acesse sua conta para ver as contas e cobranças do mês.</p>
+        </div>
+
+        <form id="form-login">
+          <label for="email">E-mail</label>
+          <div class="campo-wrapper">
+            <span class="campo-icone-esq">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                <polyline points="22,6 12,13 2,6"/>
+              </svg>
+            </span>
+            <input type="email" id="email" required autocomplete="email" placeholder="seu@email.com" />
+          </div>
+
+          <label for="senha">Senha</label>
+          <div class="campo-wrapper">
+            <span class="campo-icone-esq">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+            </span>
+            <input type="password" id="senha" required autocomplete="current-password" placeholder="••••••••" />
+            <button type="button" class="btn-toggle-senha" onclick="alternarVisibilidadeSenha('senha', this)" title="Mostrar senha" aria-label="Mostrar senha">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+              </svg>
+            </button>
+          </div>
+
+          <button type="submit" id="btn-submit-login" class="btn-auth-submit">
+            <span>Entrar</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+              <polyline points="12 5 19 12 12 19"></polyline>
+            </svg>
+          </button>
+
+          <button type="button" id="btn-preencher-demo" class="secundario" style="margin-top: 10px; display: none;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+            </svg>
+            Entrar com Conta Demo
+          </button>
+
+          <p id="msg-login"></p>
+        </form>
+      </div>
+
+      <div class="auth-rodape">
+        <p>
+          Ainda não tem conta?
+          <a class="link-destaque" id="link-criar-conta-rodape" href="cadastro.html">Criar conta</a>
+        </p>
+        <div class="auth-selo-seguranca">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
+          <span>Ambiente seguro · Dados protegidos</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- GSAP & Animações -->
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+  <script src="js/animacoes.js"></script>
+
+  <!-- Supabase JS CDN (v2) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/config.js"></script>
+  <script src="js/mockClient.js"></script>
+  <script src="js/supabaseClient.js"></script>
+  <script src="js/auth.js"></script>
+</body>
+</html>

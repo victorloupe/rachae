@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rachaê — Minhas casas</title>
+  <link rel="icon" type="image/jpeg" href="assets/icon.jpg" />
+  <meta name="theme-color" content="#0f172a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="apple-touch-icon" href="assets/icon.jpg" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="stylesheet" href="css/style.css?v=6" />
+</head>
+<body>
+  <header class="topo">
+    <div class="marca">
+      <img src="assets/icon.jpg" alt="Rachaê" class="marca-img" />
+      <h1>Rachaê</h1>
+    </div>
+    <div class="topo-acoes-usuario" id="topo-acoes-usuario">
+      <button type="button" class="btn-usuario-topo" id="btn-usuario-topo" onclick="abrirModalPerfil()" title="Meu perfil (clique para editar ou sair)">
+        <span class="avatar-topo" id="avatar-topo">U</span>
+        <span class="nome-topo" id="nome-topo">Usuário</span>
+        <svg class="chevron-topo" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="app-main">
+    <div class="container">
+    <div class="card" id="card-suas-casas" style="display: none;">
+      <h2>Suas casas</h2>
+      <div id="lista-casas"><p class="texto-suave">Carregando...</p></div>
+    </div>
+
+    <div class="card">
+      <h2>Criar nova casa</h2>
+      <form id="form-criar-casa">
+        <label for="nome-casa">Nome da casa</label>
+        <input type="text" id="nome-casa" placeholder="Ex: Lourenços" required />
+
+        <label for="numero-casa">Número da casa ou complemento <span class="texto-suave" style="font-size:12px; font-weight:normal;">(opcional)</span></label>
+        <input type="text" id="numero-casa" placeholder="Ex: 42, Apto 102, Bloco B" />
+
+        <button type="submit" style="margin-top: 10px;">Criar casa</button>
+        <p id="msg-criar-casa"></p>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>Entrar com código de convite</h2>
+      <form id="form-entrar-convite">
+        <label for="codigo-convite">Código do convite</label>
+        <input type="text" id="codigo-convite" placeholder="Cole o código aqui" required />
+        <button type="submit">Entrar na casa</button>
+        <p id="msg-convite"></p>
+      </form>
+    </div>
+  </div>
+  </main>
+
+  <!-- GSAP & Animações -->
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+  <script src="js/animacoes.js"></script>
+
+  <!-- Supabase JS CDN (v2) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/config.js"></script>
+  <script src="js/mockClient.js"></script>
+  <script src="js/supabaseClient.js"></script>
+  <script src="js/casa.js"></script>
+</body>
+</html>

@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rachaê — Cobranças do mês</title>
+  <link rel="icon" type="image/jpeg" href="assets/icon.jpg" />
+  <meta name="theme-color" content="#0f172a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="apple-touch-icon" href="assets/icon.jpg" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="stylesheet" href="css/style.css?v=6" />
+</head>
+<body>
+  <header class="topo">
+    <div class="marca">
+      <img src="assets/icon.jpg" alt="Rachaê" class="marca-img" />
+      <h1>Rachaê</h1>
+    </div>
+    <div class="topo-acoes-usuario" id="topo-acoes-usuario">
+      <button type="button" class="btn-usuario-topo" id="btn-usuario-topo" onclick="abrirModalPerfil()" title="Meu perfil (clique para editar ou sair)">
+        <span class="avatar-topo" id="avatar-topo">U</span>
+        <span class="nome-topo" id="nome-topo">Usuário</span>
+        <svg class="chevron-topo" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="app-main">
+    <div class="container">
+      <!-- Cabeçalho da Casa -->
+      <div class="card-casa-topo">
+        <div>
+          <h2 id="dash-nome-casa" class="titulo-casa-topo">Minha Casa</h2>
+          <span id="dash-numero-casa" class="numero-casa-tag" style="display: none;"></span>
+        </div>
+        <a class="btn-trocar-casa" href="casa.html?trocar=1" title="Trocar de casa">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+          </svg>
+          <span>Trocar casa</span>
+        </a>
+      </div>
+
+    <!-- Seletor de Mês -->
+    <div class="seletor-mes">
+      <button class="btn-mes" id="btn-mes-anterior" title="Mês anterior">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="15 18 9 12 15 6"/>
+        </svg>
+      </button>
+      <div class="seletor-mes-centro">
+        <h2 id="titulo-mes"></h2>
+        <button id="btn-mes-atual" class="btn-mes-atual" style="display: none;" title="Voltar ao mês atual">
+          Mês Atual
+        </button>
+      </div>
+      <button class="btn-mes" id="btn-mes-proximo" title="Próximo mês">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="9 18 15 12 9 6"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Cards de Métricas / Resumo Financeiro -->
+    <div class="grid-metricas">
+      <div class="card-metrica">
+        <span class="titulo-metrica">Total da Casa</span>
+        <span class="valor-metrica" id="metrica-total-casa">R$ 0,00</span>
+        <span class="sub-metrica" id="metrica-contas-qtd">0 contas</span>
+      </div>
+
+      <div class="card-metrica">
+        <span class="titulo-metrica">Sua Parte</span>
+        <span class="valor-metrica" id="metrica-sua-parte">R$ 0,00</span>
+        <div id="metrica-seu-status" style="margin-top: 4px;">
+          <span class="badge pendente">Pendente</span>
+        </div>
+      </div>
+
+      <div class="card-metrica">
+        <span class="titulo-metrica">Arrecadação</span>
+        <span class="valor-metrica" id="metrica-progresso-qtd">0 / 0</span>
+        <div class="barra-progresso-container">
+          <div class="barra-progresso-preenchimento" id="metrica-barra-progresso" style="width: 0%;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Banner Inteligente de Ação Rápida Pessoal (Sua Cota) -->
+    <div id="container-alerta-pessoal"></div>
+
+    <div class="card">
+      <div class="cabecalho-secao-detalhe">
+        <h2 style="margin: 0 0 10px 0;">Detalhamento</h2>
+        <div class="grid-acoes-detalhe">
+          <button id="btn-gerar-ciclo" type="button" class="btn-detalhe-acao btn-primario-acao" title="Sincronizar contas e moradores do mês">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+            </svg>
+            <span>Sincronizar</span>
+          </button>
+          <button id="btn-resumo-grupo" type="button" class="btn-detalhe-acao btn-whatsapp-acao" title="Enviar resumo no grupo de WhatsApp da casa">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
+            </svg>
+            <span>Resumo do Grupo</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Filtros Rápidos de Cobrança (Segmented Control 100% largura) -->
+      <div class="filtros-container" id="filtros-cobrancas">
+        <button type="button" class="btn-filtro ativo" data-filtro="todos" id="filtro-btn-todos">
+          Todos <span class="badge-contagem" id="cont-filtro-todos">0</span>
+        </button>
+        <button type="button" class="btn-filtro" data-filtro="pendente" id="filtro-btn-pendentes">
+          Pendentes <span class="badge-contagem pendente" id="cont-filtro-pendentes">0</span>
+        </button>
+        <button type="button" class="btn-filtro" data-filtro="pago" id="filtro-btn-pagos">
+          Pagos <span class="badge-contagem pago" id="cont-filtro-pagos">0</span>
+        </button>
+      </div>
+
+      <div id="lista-ciclos">
+        <div class="skeleton-lista">
+          <div class="skeleton-item">
+            <div class="skeleton-item-esq">
+              <div class="skeleton-shimmer" style="width: 140px; height: 16px;"></div>
+              <div class="skeleton-shimmer" style="width: 80px; height: 12px;"></div>
+            </div>
+            <div class="skeleton-item-dir">
+              <div class="skeleton-shimmer" style="width: 70px; height: 24px; border-radius: 999px;"></div>
+              <div class="skeleton-shimmer" style="width: 32px; height: 32px; border-radius: 8px;"></div>
+            </div>
+          </div>
+          <div class="skeleton-item">
+            <div class="skeleton-item-esq">
+              <div class="skeleton-shimmer" style="width: 170px; height: 16px;"></div>
+              <div class="skeleton-shimmer" style="width: 90px; height: 12px;"></div>
+            </div>
+            <div class="skeleton-item-dir">
+              <div class="skeleton-shimmer" style="width: 70px; height: 24px; border-radius: 999px;"></div>
+              <div class="skeleton-shimmer" style="width: 32px; height: 32px; border-radius: 8px;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal simples do QR Code Pix -->
+  <div id="modal-pix" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.6); align-items:center; justify-content:center; z-index:999; backdrop-filter:blur(3px);">
+    <div class="card" id="card-modal-pix" style="max-width:340px; margin:16px; width:100%; box-shadow:var(--sombra-flutuante);">
+      <h2>Pagar via Pix</h2>
+      <div id="conteudo-modal-pix"></div>
+      <button class="secundario" onclick="fecharModalPix()" style="margin-top:12px;">Fechar</button>
+    </div>
+  </div>
+  </main>
+
+  <div class="rodape-nav">
+    <a href="dashboard.html" class="ativo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="18" y1="20" x2="18" y2="10"/>
+        <line x1="12" y1="20" x2="12" y2="4"/>
+        <line x1="6" y1="20" x2="6" y2="14"/>
+      </svg>
+      <span>Cobranças</span>
+    </a>
+    <a href="contas.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/>
+        <path d="M8 7h8"/>
+        <path d="M8 11h8"/>
+        <path d="M8 15h5"/>
+      </svg>
+      <span>Contas</span>
+    </a>
+    <a href="convidar.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+        <circle cx="9" cy="7" r="4"/>
+        <line x1="19" y1="8" x2="19" y2="14"/>
+        <line x1="22" y1="11" x2="16" y2="11"/>
+      </svg>
+      <span>Convidar</span>
+    </a>
+  </div>
+
+  <!-- GSAP & Animações -->
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+  <script src="js/animacoes.js"></script>
+
+  <!-- Supabase JS CDN (v2) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/config.js"></script>
+  <script src="js/mockClient.js"></script>
+  <script src="js/supabaseClient.js"></script>
+  <script src="js/instantNav.js"></script>
+  <script src="js/dashboard.js"></script>
+</body>
+</html>

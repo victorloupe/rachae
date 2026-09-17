@@ -1,0 +1,261 @@
+// ============================================================
+// Módulo de Animações Fluidas com GSAP (GreenSock) - Rachaê
+// ============================================================
+
+const Animacoes = (() => {
+  // Respeita acessibilidade de usuários que desativaram animações no SO
+  const prefereReducao = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  function gsapDisponivel() {
+    return typeof window.gsap !== "undefined";
+  }
+
+  // Animação de entrada dos blocos da página (Staggered Fade-in)
+  function animarEntradaPagina(seletor = ".card-metrica, .card, .card-casa-topo, .seletor-mes") {
+    if (!gsapDisponivel() || prefereReducao) return;
+
+    gsap.fromTo(
+      seletor,
+      {
+        opacity: 0,
+        y: 16,
+      },
+      {
+        opacity: 1,
+        y: 0,
+        duration: 0.45,
+        stagger: 0.05,
+        ease: "power2.out",
+        clearProps: "transform,opacity",
+      }
+    );
+  }
+
+  // Animação de contador numérico em moeda (estilo Nubank/Revolut)
+  function animarNumeroMoeda(elemento, valorFinal, duracao = 0.7) {
+    if (!elemento) return;
+    const final = Number(valorFinal) || 0;
+
+    if (!gsapDisponivel() || prefereReducao) {
+      elemento.textContent = window.formatarMoeda ? window.formatarMoeda(final) : `R$ ${final.toFixed(2).replace(".", ",")}`;
+      return;
+    }
+
+    // Lê valor atual do elemento se já tiver número
+    const textoAtual = elemento.textContent.replace(/[^\d]/g, "");
+    const valorInicial = textoAtual ? Number(textoAtual) / 100 : 0;
+
+    const contador = { valor: valorInicial };
+
+    gsap.to(contador, {
+      valor: final,
+      duration: duracao,
+      ease: "power2.out",
+      onUpdate: () => {
+        if (window.formatarMoeda) {
+          elemento.textContent = window.formatarMoeda(contador.valor);
+        } else {
+          elemento.textContent = `R$ ${contador.valor.toFixed(2).replace(".", ",")}`;
+        }
+      },
+      onComplete: () => {
+        if (window.formatarMoeda) {
+          elemento.textContent = window.formatarMoeda(final);
+        }
+      },
+    });
+  }
+
+  // Animação de contador fracionário (ex: "1 / 3")
+  function animarNumeroFracionario(elemento, atual, total, duracao = 0.6) {
+    if (!elemento) return;
+    const alvoAtual = Number(atual) || 0;
+    const alvoTotal = Number(total) || 0;
+
+    if (!gsapDisponivel() || prefereReducao) {
+      elemento.textContent = `${alvoAtual} / ${alvoTotal}`;
+      return;
+    }
+
+    const contador = { valor: 0 };
+    gsap.to(contador, {
+      valor: alvoAtual,
+      duration: duracao,
+      ease: "power1.out",
+      onUpdate: () => {
+        elemento.textContent = `${Math.round(contador.valor)} / ${alvoTotal}`;
+      },
+      onComplete: () => {
+        elemento.textContent = `${alvoAtual} / ${alvoTotal}`;
+      },
+    });
+  }
+
+  // Animação da barra de arrecadação
+  function animarBarraProgresso(elemento, percentual, duracao = 0.7) {
+    if (!elemento) return;
+    const pctClamped = Math.max(0, Math.min(100, Number(percentual) || 0));
+    const escala = pctClamped / 100;
+
+    if (!gsapDisponivel() || prefereReducao) {
+      elemento.style.transform = `scaleX(${escala})`;
+      return;
+    }
+
+    gsap.to(elemento, {
+      scaleX: escala,
+      duration: duracao,
+      ease: "power2.out",
+      transformOrigin: "left center",
+    });
+  }
+
+  // Animação em cascata (stagger) para listas de linhas
+  function animarListaLinhas(seletorOuElementos, duracao = 0.35) {
+    if (!gsapDisponivel() || prefereReducao) return;
+
+    const itens = typeof seletorOuElementos === "string"
+      ? document.querySelectorAll(seletorOuElementos)
+      : seletorOuElementos;
+
+    if (!itens || itens.length === 0) return;
+
+    gsap.fromTo(
+      itens,
+      {
+        opacity: 0,
+        y: 8,
+      },
+      {
+        opacity: 1,
+        y: 0,
+        duration: duracao,
+        stagger: 0.04,
+        ease: "power1.out",
+        clearProps: "transform,opacity",
+      }
+    );
+  }
+
+  // Modal Pix: entrada elástica suave
+  function animarAberturaModal(modalEl, cardEl) {
+    if (!modalEl) return;
+    modalEl.style.display = "flex";
+
+    if (!gsapDisponivel() || prefereReducao) return;
+
+    gsap.fromTo(
+      modalEl,
+      { opacity: 0 },
+      { opacity: 1, duration: 0.2, ease: "power1.out" }
+    );
+
+    if (cardEl) {
+      gsap.fromTo(
+        cardEl,
+        {
+          opacity: 0,
+          scale: 0.92,
+          y: 12,
+        },
+        {
+          opacity: 1,
+          scale: 1,
+          y: 0,
+          duration: 0.32,
+          ease: "back.out(1.5)",
+          clearProps: "transform,opacity",
+        }
+      );
+    }
+  }
+
+  // Modal Pix: fechamento suave
+  function animarFechamentoModal(modalEl, cardEl, callback) {
+    if (!modalEl) return;
+
+    if (!gsapDisponivel() || prefereReducao) {
+      modalEl.style.display = "none";
+      if (typeof callback === "function") callback();
+      return;
+    }
+
+    const tl = gsap.timeline({
+      onComplete: () => {
+        modalEl.style.display = "none";
+        if (typeof callback === "function") callback();
+      },
+    });
+
+    if (cardEl) {
+      tl.to(cardEl, {
+        opacity: 0,
+        scale: 0.94,
+        duration: 0.18,
+        ease: "power2.in",
+      }, 0);
+    }
+
+    tl.to(modalEl, {
+      opacity: 0,
+      duration: 0.2,
+      ease: "power2.in",
+    }, 0);
+  }
+
+  // Microinteração comemorativa (ao copiar Pix ou confirmar)
+  function animarPulseSucesso(elemento) {
+    if (!elemento || !gsapDisponivel() || prefereReducao) return;
+
+    gsap.timeline()
+      .to(elemento, { scale: 1.05, duration: 0.12, ease: "power1.out" })
+      .to(elemento, { scale: 1, duration: 0.18, ease: "power2.inOut" });
+  }
+
+  // Feedback tátil nos cliques de botões principais
+  function configurarMicrointeracoesBotoes() {
+    if (!gsapDisponivel() || prefereReducao) return;
+
+    document.addEventListener("mousedown", (e) => {
+      const btn = e.target.closest("button, .btn-filtro, .btn-alerta-pagar, .btn-trocar-casa");
+      if (!btn) return;
+
+      gsap.to(btn, {
+        scale: 0.97,
+        duration: 0.08,
+        ease: "power1.inOut",
+      });
+    });
+
+    document.addEventListener("mouseup", (e) => {
+      const btn = e.target.closest("button, .btn-filtro, .btn-alerta-pagar, .btn-trocar-casa");
+      if (!btn) return;
+
+      gsap.to(btn, {
+        scale: 1,
+        duration: 0.16,
+        ease: "back.out(2)",
+      });
+    });
+  }
+
+  // Inicialização automática das microinterações
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", configurarMicrointeracoesBotoes);
+  } else {
+    configurarMicrointeracoesBotoes();
+  }
+
+  return {
+    animarEntradaPagina,
+    animarNumeroMoeda,
+    animarNumeroFracionario,
+    animarBarraProgresso,
+    animarListaLinhas,
+    animarAberturaModal,
+    animarFechamentoModal,
+    animarPulseSucesso,
+  };
+})();
+
+window.Animacoes = Animacoes;
