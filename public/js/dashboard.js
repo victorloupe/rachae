@@ -286,6 +286,8 @@ async function carregarCiclosDoMes() {
           cacheObj.contadores.totalPagas
         );
         atualizarBannerPessoal(cacheObj.banner?.cobrancaPendenteEu, cacheObj.banner?.totalPendenteEu || 0);
+        atualizarAlertasVencimento(cacheObj.dadosCiclosCarregados, mesReferencia);
+        calcularComparativoMesAnterior(mesReferencia, cacheObj.metricas?.totalCasa || 0);
         renderizarCiclosNaTela(false);
       }
     } catch (e) {
@@ -335,6 +337,8 @@ async function carregarCiclosDoMes() {
     atualizarMetricas(metricasVazias);
     atualizarContadoresFiltros(0, 0, 0);
     atualizarBannerPessoal(null, 0);
+    atualizarAlertasVencimento([], mesReferencia);
+    calcularComparativoMesAnterior(mesReferencia, 0);
 
     sessionStorage.setItem(cacheKey, JSON.stringify({
       dadosCiclosCarregados: [],
@@ -375,6 +379,8 @@ async function carregarCiclosDoMes() {
     atualizarMetricas(metricasVazias);
     atualizarContadoresFiltros(0, 0, 0);
     atualizarBannerPessoal(null, 0);
+    atualizarAlertasVencimento([], mesReferencia);
+    calcularComparativoMesAnterior(mesReferencia, 0);
 
     sessionStorage.setItem(cacheKey, JSON.stringify({
       dadosCiclosCarregados: [],
@@ -482,6 +488,8 @@ async function carregarCiclosDoMes() {
     atualizarMetricas(metricasCalculadas);
     atualizarContadoresFiltros(totalCobrancas, totalPendentes, totalPagas);
     atualizarBannerPessoal(cobrancaPendenteEu, totalPendenteEu);
+    atualizarAlertasVencimento(novosDadosCiclos, mesReferencia);
+    calcularComparativoMesAnterior(mesReferencia, totalCasa);
     renderizarCiclosNaTela(!temCache);
   }
 }
@@ -510,20 +518,178 @@ function calcularStatusVencimento(cobranca, conta, mesReferencia) {
   const diaVenc = parseInt(conta.dia_vencimento, 10);
 
   const hoje = new Date();
-  const hojeAno = hoje.getFullYear();
-  const hojeMes = hoje.getMonth() + 1;
-  const hojeDia = hoje.getDate();
+  const dataHojeZero = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate(), 0, 0, 0);
+  const dataVencZero = new Date(ano, mes - 1, diaVenc, 0, 0, 0);
+  const diffDias = Math.round((dataVencZero - dataHojeZero) / (1000 * 60 * 60 * 24));
 
-  if (hojeAno === ano && hojeMes === mes && hojeDia === diaVenc) {
-    return { texto: "Vence hoje", classe: "vence-hoje" };
-  }
-
-  const dataVenc = new Date(ano, mes - 1, diaVenc, 23, 59, 59);
-  if (hoje > dataVenc) {
+  if (diffDias < 0) {
     return { texto: `Vencida (${diaVenc}/${String(mes).padStart(2, "0")})`, classe: "vencida" };
+  }
+  if (diffDias === 0) {
+    return { texto: "Vence hoje!", classe: "vence-hoje" };
+  }
+  if (diffDias === 1) {
+    return { texto: "Vence amanhã", classe: "vence-hoje" };
   }
 
   return { texto: `Pendente (${diaVenc}/${String(mes).padStart(2, "0")})`, classe: "pendente" };
+}
+
+function atualizarAlertasVencimento(dadosCiclos, mesReferencia) {
+  const container = document.getElementById("container-alertas-vencimento");
+  if (!container) return;
+
+  if (!dadosCiclos || dadosCiclos.length === 0) {
+    container.innerHTML = "";
+    return;
+  }
+
+  const hoje = new Date();
+  const dataHojeZero = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate(), 0, 0, 0);
+
+  const partes = (mesReferencia || "").split("-");
+  const ano = parseInt(partes[0], 10);
+  const mes = parseInt(partes[1], 10);
+
+  let qtdVencidas = 0;
+  let qtdVenceHoje = 0;
+  let qtdVenceAmanha = 0;
+  let nomesContasVencidas = new Set();
+  let nomesContasHoje = new Set();
+
+  for (const { conta, cobrancas } of dadosCiclos) {
+    if (!conta || !conta.dia_vencimento) continue;
+    const diaVenc = parseInt(conta.dia_vencimento, 10);
+    const dataVencZero = new Date(ano, mes - 1, diaVenc, 0, 0, 0);
+    const diffDias = Math.round((dataVencZero - dataHojeZero) / (1000 * 60 * 60 * 24));
+
+    const pendentes = (cobrancas || []).filter((c) => c.status !== "pago");
+    if (pendentes.length > 0) {
+      if (diffDias < 0) {
+        qtdVencidas += pendentes.length;
+        nomesContasVencidas.add(conta.nome);
+      } else if (diffDias === 0) {
+        qtdVenceHoje += pendentes.length;
+        nomesContasHoje.add(conta.nome);
+      } else if (diffDias === 1) {
+        qtdVenceAmanha += pendentes.length;
+      }
+    }
+  }
+
+  if (qtdVencidas > 0) {
+    const listaNomes = Array.from(nomesContasVencidas).slice(0, 2).join(", ");
+    container.innerHTML = `
+      <div class="card-alerta-vencimento urgente">
+        <div class="card-alerta-vencimento-esq">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="8" x2="12" y2="12"></line>
+            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+          </svg>
+          <div>
+            <strong>Atenção:</strong> ${qtdVencidas} cobrança${qtdVencidas > 1 ? "s vencidas" : " vencida"} (${listaNomes}).
+          </div>
+        </div>
+        <button type="button" class="btn-filtro" style="padding: 4px 10px; font-size: 11px; margin: 0; background: rgba(0,0,0,0.06); border: none; cursor: pointer;" onclick="filtrarCobrancas('pendente')">Ver pendentes</button>
+      </div>
+    `;
+  } else if (qtdVenceHoje > 0) {
+    const listaNomes = Array.from(nomesContasHoje).slice(0, 2).join(", ");
+    container.innerHTML = `
+      <div class="card-alerta-vencimento atencao">
+        <div class="card-alerta-vencimento-esq">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <polyline points="12 6 12 12 16 14"></polyline>
+          </svg>
+          <div>
+            <strong>Vencendo hoje:</strong> ${listaNomes} (${qtdVenceHoje} pendência${qtdVenceHoje > 1 ? "s" : ""}).
+          </div>
+        </div>
+        <button type="button" class="btn-filtro" style="padding: 4px 10px; font-size: 11px; margin: 0; background: rgba(0,0,0,0.06); border: none; cursor: pointer;" onclick="filtrarCobrancas('pendente')">Ver pendentes</button>
+      </div>
+    `;
+  } else if (qtdVenceAmanha > 0) {
+    container.innerHTML = `
+      <div class="card-alerta-vencimento atencao">
+        <div class="card-alerta-vencimento-esq">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <polyline points="12 6 12 12 16 14"></polyline>
+          </svg>
+          <div>
+            <strong>Lembrete:</strong> Há contas vencendo amanhã (${qtdVenceAmanha} pendência${qtdVenceAmanha > 1 ? "s" : ""}).
+          </div>
+        </div>
+        <button type="button" class="btn-filtro" style="padding: 4px 10px; font-size: 11px; margin: 0; background: rgba(0,0,0,0.06); border: none; cursor: pointer;" onclick="filtrarCobrancas('pendente')">Ver pendentes</button>
+      </div>
+    `;
+  } else {
+    container.innerHTML = "";
+  }
+}
+
+async function calcularComparativoMesAnterior(mesReferencia, totalCasaAtual) {
+  const badge = document.getElementById("badge-comparativo-mes");
+  if (!badge) return;
+
+  if (!totalCasaAtual || totalCasaAtual <= 0) {
+    badge.style.display = "none";
+    return;
+  }
+
+  try {
+    const partes = (mesReferencia || "").split("-");
+    const ano = parseInt(partes[0], 10);
+    const mes = parseInt(partes[1], 10);
+    const dataMesAnterior = new Date(ano, mes - 2, 1);
+    const mesAnteriorStr = `${dataMesAnterior.getFullYear()}-${String(dataMesAnterior.getMonth() + 1).padStart(2, "0")}-01`;
+
+    const { data: contasCasa } = await supabaseClient
+      .from("contas_fixas")
+      .select("id")
+      .eq("casa_id", casaId);
+
+    if (!contasCasa || contasCasa.length === 0) {
+      badge.style.display = "none";
+      return;
+    }
+
+    const contaIds = contasCasa.map((c) => c.id);
+    const { data: ciclosAnteriores } = await supabaseClient
+      .from("ciclos_cobranca")
+      .select("valor_total")
+      .in("conta_fixa_id", contaIds)
+      .eq("mes_referencia", mesAnteriorStr);
+
+    const totalMesAnterior = (ciclosAnteriores || []).reduce((acc, c) => acc + Number(c.valor_total || 0), 0);
+
+    if (totalMesAnterior > 0) {
+      const diff = totalCasaAtual - totalMesAnterior;
+      const pct = Math.round((Math.abs(diff) / totalMesAnterior) * 100);
+
+      badge.style.display = "inline-flex";
+      if (diff > 0) {
+        badge.className = "badge-comparativo-mes maior";
+        badge.innerHTML = `↑ +${pct}% vs mês ant.`;
+        badge.title = `Aumento de ${formatarMoeda(diff)} em relação ao mês anterior (${formatarMoeda(totalMesAnterior)})`;
+      } else if (diff < 0) {
+        badge.className = "badge-comparativo-mes menor";
+        badge.innerHTML = `↓ -${pct}% vs mês ant.`;
+        badge.title = `Economia de ${formatarMoeda(Math.abs(diff))} em relação ao mês anterior (${formatarMoeda(totalMesAnterior)})`;
+      } else {
+        badge.className = "badge-comparativo-mes igual";
+        badge.innerHTML = `= 0% vs mês ant.`;
+        badge.title = `Mesmo total do mês anterior (${formatarMoeda(totalMesAnterior)})`;
+      }
+    } else {
+      badge.style.display = "none";
+    }
+  } catch (err) {
+    console.warn("Erro ao calcular comparativo do mês:", err);
+    badge.style.display = "none";
+  }
 }
 
 function renderizarCiclosNaTela(animar = false) {
@@ -715,6 +881,11 @@ function configurarAcoesDashboard() {
   const btnResumo = document.getElementById("btn-resumo-grupo");
   if (btnResumo) {
     btnResumo.onclick = enviarResumoGrupoWhatsApp;
+  }
+
+  const btnExportar = document.getElementById("btn-exportar-relatorio");
+  if (btnExportar) {
+    btnExportar.onclick = exportarRelatorioMes;
   }
 
   const btnGerar = document.getElementById("btn-gerar-ciclo");
@@ -1243,20 +1414,58 @@ async function enviarCobrancaWhatsApp(cobrancaId, nomeContaOpcional = null, jaPa
 
   let texto = "";
   if (estaPago) {
-    texto = `*Rachaê - Pagamento Confirmado*\n`;
+    texto = `*Rachaê - Pagamento Confirmado* ✅\n`;
     texto += `Olá, *${nomeMorador}*!\n\n`;
     texto += `Confirmamos o recebimento do seu pagamento de *${valorFormatado}* referente à conta *${nomeConta}* (${mesFormatado}).\n\n`;
     texto += `Tudo certo por aqui, pagamento registrado com sucesso. Muito obrigado!`;
   } else {
-    texto = `*Rachaê - Cobrança da Casa*\n`;
-    texto += `Olá, *${nomeMorador}*!\n\n`;
-    texto += `Sua parte da conta *${nomeConta}* (${mesFormatado}) é de *${valorFormatado}*.\n\n`;
-
-    if (cobranca.pix_copia_cola) {
-      texto += `*Código Pix Copia e Cola:*\n\`\`\`${cobranca.pix_copia_cola}\`\`\`\n\n`;
+    // 1. Descobrir dia de vencimento da conta
+    let diaVencimento = null;
+    if (dadosCiclosCarregados) {
+      for (const d of dadosCiclosCarregados) {
+        if (d.cobrancas && d.cobrancas.some((c) => c.id === cobrancaId)) {
+          diaVencimento = d.conta?.dia_vencimento;
+          break;
+        }
+      }
     }
 
-    texto += `Assim que fizer o pagamento pelo app do seu banco, me avise ou envie o comprovante. Obrigado!`;
+    // 2. Buscar chave Pix oficial da casa
+    let chavePixCasa = null;
+    let tipoChavePixCasa = "Pix";
+    try {
+      const { data: casa } = await supabaseClient
+        .from("casas")
+        .select("chave_pix, tipo_chave_pix")
+        .eq("id", casaId)
+        .maybeSingle();
+
+      if (casa?.chave_pix) {
+        chavePixCasa = casa.chave_pix;
+        tipoChavePixCasa = casa.tipo_chave_pix || "Pix";
+      }
+    } catch (e) {}
+
+    const vencTexto = diaVencimento
+      ? `📅 *Vencimento:* ${String(diaVencimento).padStart(2, "0")}/${String(dataSelecionada.getMonth() + 1).padStart(2, "0")}/${dataSelecionada.getFullYear()}\n`
+      : "";
+
+    texto = `*Rachaê - Cobrança da Casa* 🏠\n`;
+    texto += `Olá, *${nomeMorador}*!\n\n`;
+    texto += `Passando para lembrar da sua parte da conta *${nomeConta}* (${mesFormatado}):\n`;
+    texto += `💰 *Valor:* *${valorFormatado}*\n`;
+    if (vencTexto) texto += vencTexto;
+    texto += `\n`;
+
+    if (chavePixCasa) {
+      texto += `🔑 *Chave Pix da Casa (${tipoChavePixCasa}):*\n\`\`\`${chavePixCasa}\`\`\`\n\n`;
+    }
+
+    if (cobranca.pix_copia_cola) {
+      texto += `📋 *Código Pix Copia e Cola:*\n\`\`\`${cobranca.pix_copia_cola}\`\`\`\n\n`;
+    }
+
+    texto += `Assim que fizer o pagamento pelo app do seu banco, me avise ou envie o comprovante por aqui. Obrigado!`;
   }
 
   const tel = cobranca.profiles && cobranca.profiles.telefone ? cobranca.profiles.telefone.replace(/\D/g, "") : "";
@@ -1269,8 +1478,41 @@ async function enviarCobrancaWhatsApp(cobrancaId, nomeContaOpcional = null, jaPa
   window.open(url, "_blank");
 }
 
+function exportarRelatorioMes() {
+  const nomeCasaEl = document.getElementById("dash-nome-casa");
+  const nomeCasa = nomeCasaEl ? nomeCasaEl.textContent.trim() : "Minha Casa";
+  const nomeMes = MESES[dataSelecionada.getMonth()];
+  const ano = dataSelecionada.getFullYear();
+
+  const printCasa = document.getElementById("print-info-casa");
+  const printMes = document.getElementById("print-info-mes");
+  const printEmissao = document.getElementById("print-info-emissao");
+
+  if (printCasa) printCasa.textContent = `Casa: ${nomeCasa}`;
+  if (printMes) printMes.textContent = `${nomeMes} de ${ano}`;
+  if (printEmissao) {
+    const hoje = new Date();
+    printEmissao.textContent = `Emitido em ${hoje.toLocaleDateString("pt-BR")} às ${hoje.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`;
+  }
+
+  // Define filtro para "todos" para exibir o relatório completo com todas as cobranças
+  const btnTodos = document.getElementById("filtro-btn-todos");
+  if (btnTodos && filtroAtual !== "todos") {
+    btnTodos.click();
+  }
+
+  const originalTitle = document.title;
+  document.title = `Rachaê - Relatório ${nomeMes} ${ano} - ${nomeCasa}`;
+
+  window.print();
+
+  setTimeout(() => {
+    document.title = originalTitle;
+  }, 1000);
+}
+
 async function confirmarPagamentoSimulado(cobrancaId) {
-  const isMock = typeof ehModoMock !== "undefined" ? ehModoMock : (window.RachaFixoFirebase ? window.RachaFixoFirebase.ehModoMock : false);
+  const isMock = typeof ehModoMock !== "undefined" ? ehModoMock : false;
   if (isMock && window.RachaFixoMock) {
     await window.RachaFixoMock.simularPagamento(cobrancaId);
   } else {
@@ -1286,7 +1528,7 @@ async function confirmarPagamentoSimulado(cobrancaId) {
 }
 
 async function reverterParaPendente(cobrancaId) {
-  const isMock = typeof ehModoMock !== "undefined" ? ehModoMock : (window.RachaFixoFirebase ? window.RachaFixoFirebase.ehModoMock : false);
+  const isMock = typeof ehModoMock !== "undefined" ? ehModoMock : false;
   if (isMock && window.RachaFixoMock) {
     await window.RachaFixoMock.reverterPagamento(cobrancaId);
   } else {
@@ -1443,6 +1685,7 @@ window.abrirModalPix = abrirModalPix;
 window.fecharModalPix = fecharModalPix;
 window.copiarPix = copiarPix;
 window.enviarCobrancaWhatsApp = enviarCobrancaWhatsApp;
+window.exportarRelatorioMes = exportarRelatorioMes;
 window.confirmarPagamentoSimulado = confirmarPagamentoSimulado;
 window.reverterParaPendente = reverterParaPendente;
 window.ajustarValorCiclo = ajustarValorCiclo;

@@ -643,9 +643,18 @@ function renderizarPixNaTela(casa) {
       badge.className = "badge pago";
     }
     if (selectTipo) selectTipo.value = casa.tipo_chave_pix || "telefone";
-    if (inputChave) inputChave.value = casa.chave_pix;
+    if (inputChave) {
+      let chaveFormatada = casa.chave_pix;
+      if (casa.tipo_chave_pix === "telefone") chaveFormatada = formatarTelefonePix(casa.chave_pix);
+      else if (casa.tipo_chave_pix === "cpf") chaveFormatada = formatarCpfPix(casa.chave_pix);
+      else if (casa.tipo_chave_pix === "cnpj") chaveFormatada = formatarCnpjPix(casa.chave_pix);
+      inputChave.value = chaveFormatada;
+    }
     if (txtMorador) {
-      const chaveFormatada = casa.tipo_chave_pix === "telefone" ? formatarTelefone(casa.chave_pix) : casa.chave_pix;
+      let chaveFormatada = casa.chave_pix;
+      if (casa.tipo_chave_pix === "telefone") chaveFormatada = formatarTelefonePix(casa.chave_pix);
+      else if (casa.tipo_chave_pix === "cpf") chaveFormatada = formatarCpfPix(casa.chave_pix);
+      else if (casa.tipo_chave_pix === "cnpj") chaveFormatada = formatarCnpjPix(casa.chave_pix);
       txtMorador.textContent = `${chaveFormatada} (${rotuloTipoPix(casa.tipo_chave_pix)})`;
     }
   } else {
@@ -698,35 +707,140 @@ function rotuloTipoPix(tipo) {
   return map[tipo] || "Pix";
 }
 
+function formatarTelefonePix(val) {
+  if (!val) return "";
+  const digits = val.replace(/\D/g, "").slice(0, 11);
+  if (digits.length <= 2) return digits.length ? `(${digits}` : "";
+  if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  if (digits.length <= 10) return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7, 11)}`;
+}
+
+function formatarCpfPix(val) {
+  if (!val) return "";
+  const digits = val.replace(/\D/g, "").slice(0, 11);
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return `${digits.slice(0, 3)}.${digits.slice(3)}`;
+  if (digits.length <= 9) return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`;
+  return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9, 11)}`;
+}
+
+function formatarCnpjPix(val) {
+  if (!val) return "";
+  const digits = val.replace(/\D/g, "").slice(0, 14);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 5) return `${digits.slice(0, 2)}.${digits.slice(2)}`;
+  if (digits.length <= 8) return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5)}`;
+  if (digits.length <= 12) return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8)}`;
+  return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8, 12)}-${digits.slice(12, 14)}`;
+}
+
+function validarCPF(cpf) {
+  const limpo = cpf.replace(/\D/g, "");
+  if (limpo.length !== 11) return false;
+  if (/^(\d)\1{10}$/.test(limpo)) return false;
+  let soma = 0;
+  for (let i = 0; i < 9; i++) soma += parseInt(limpo.charAt(i), 10) * (10 - i);
+  let resto = 11 - (soma % 11);
+  let digito1 = resto >= 10 ? 0 : resto;
+  if (digito1 !== parseInt(limpo.charAt(9), 10)) return false;
+  soma = 0;
+  for (let i = 0; i < 10; i++) soma += parseInt(limpo.charAt(i), 10) * (11 - i);
+  resto = 11 - (soma % 11);
+  let digito2 = resto >= 10 ? 0 : resto;
+  return digito2 === parseInt(limpo.charAt(10), 10);
+}
+
+function validarCNPJ(cnpj) {
+  const limpo = cnpj.replace(/\D/g, "");
+  if (limpo.length !== 14) return false;
+  if (/^(\d)\1{13}$/.test(limpo)) return false;
+  const pesos1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+  const pesos2 = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+  let soma = 0;
+  for (let i = 0; i < 12; i++) soma += parseInt(limpo.charAt(i), 10) * pesos1[i];
+  let resto = soma % 11;
+  let dig1 = resto < 2 ? 0 : 11 - resto;
+  if (dig1 !== parseInt(limpo.charAt(12), 10)) return false;
+  soma = 0;
+  for (let i = 0; i < 13; i++) soma += parseInt(limpo.charAt(i), 10) * pesos2[i];
+  resto = soma % 11;
+  let dig2 = resto < 2 ? 0 : 11 - resto;
+  return dig2 === parseInt(limpo.charAt(13), 10);
+}
+
+function validarEmailPix(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+}
+
+function validarTelefonePix(tel) {
+  const d = tel.replace(/\D/g, "");
+  return d.length === 10 || d.length === 11;
+}
+
+function validarAleatoriaPix(chave) {
+  const limpa = chave.trim();
+  return /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(limpa) || limpa.length >= 32;
+}
+
 function configurarFormPixCasa() {
   const form = document.getElementById("form-pix-casa");
   const selectTipo = document.getElementById("pix-tipo");
   const inputChave = document.getElementById("pix-chave");
+  const hintChave = document.getElementById("hint-pix-chave");
   const msg = document.getElementById("msg-pix-casa");
 
   if (!form) return;
 
+  const aplicarAjusteTipo = () => {
+    if (!selectTipo || !inputChave) return;
+    const tipo = selectTipo.value;
+    if (tipo === "telefone") {
+      inputChave.placeholder = "(00) 00000-0000";
+      inputChave.type = "tel";
+      if (hintChave) hintChave.textContent = "Digite o DDD e o número de celular ou fixo.";
+      inputChave.value = formatarTelefonePix(inputChave.value);
+    } else if (tipo === "cpf") {
+      inputChave.placeholder = "000.000.000-00";
+      inputChave.type = "text";
+      if (hintChave) hintChave.textContent = "Digite os 11 dígitos do CPF do titular da conta.";
+      inputChave.value = formatarCpfPix(inputChave.value);
+    } else if (tipo === "cnpj") {
+      inputChave.placeholder = "00.000.000/0000-00";
+      inputChave.type = "text";
+      if (hintChave) hintChave.textContent = "Digite os 14 dígitos do CNPJ.";
+      inputChave.value = formatarCnpjPix(inputChave.value);
+    } else if (tipo === "email") {
+      inputChave.placeholder = "exemplo@email.com";
+      inputChave.type = "email";
+      if (hintChave) hintChave.textContent = "Digite o e-mail cadastrado como chave no banco.";
+      inputChave.value = inputChave.value.trim().toLowerCase();
+    } else {
+      inputChave.placeholder = "Chave aleatória UUID";
+      inputChave.type = "text";
+      if (hintChave) hintChave.textContent = "Cole a chave aleatória gerada pelo aplicativo do banco.";
+      inputChave.value = inputChave.value.trim();
+    }
+  };
+
   if (selectTipo && inputChave) {
-    selectTipo.onchange = () => {
+    selectTipo.onchange = aplicarAjusteTipo;
+
+    inputChave.oninput = () => {
       const tipo = selectTipo.value;
       if (tipo === "telefone") {
-        inputChave.placeholder = "(00) 00000-0000";
-        inputChave.type = "tel";
+        inputChave.value = formatarTelefonePix(inputChave.value);
       } else if (tipo === "cpf") {
-        inputChave.placeholder = "000.000.000-00";
-        inputChave.type = "text";
+        inputChave.value = formatarCpfPix(inputChave.value);
       } else if (tipo === "cnpj") {
-        inputChave.placeholder = "00.000.000/0000-00";
-        inputChave.type = "text";
+        inputChave.value = formatarCnpjPix(inputChave.value);
       } else if (tipo === "email") {
-        inputChave.placeholder = "exemplo@email.com";
-        inputChave.type = "email";
-      } else {
-        inputChave.placeholder = "Chave aleatória UUID";
-        inputChave.type = "text";
+        inputChave.value = inputChave.value.toLowerCase().replace(/\s/g, "");
       }
     };
   }
+
+  aplicarAjusteTipo();
 
   form.onsubmit = async (e) => {
     e.preventDefault();
@@ -735,11 +849,43 @@ function configurarFormPixCasa() {
       return;
     }
 
-    const chave = inputChave.value.trim();
     const tipo = selectTipo.value;
+    const chave = inputChave.value.trim();
 
     if (!chave) {
       mostrarToast("Informe a chave Pix.", "alerta");
+      inputChave.focus();
+      return;
+    }
+
+    // Validação estrita por tipo de chave
+    if (tipo === "telefone" && !validarTelefonePix(chave)) {
+      mostrarToast("Telefone inválido. Digite DDD + número (10 ou 11 dígitos).", "alerta");
+      inputChave.focus();
+      return;
+    }
+
+    if (tipo === "cpf" && !validarCPF(chave)) {
+      mostrarToast("CPF inválido. Verifique os números digitados.", "alerta");
+      inputChave.focus();
+      return;
+    }
+
+    if (tipo === "cnpj" && !validarCNPJ(chave)) {
+      mostrarToast("CNPJ inválido. Verifique os números digitados.", "alerta");
+      inputChave.focus();
+      return;
+    }
+
+    if (tipo === "email" && !validarEmailPix(chave)) {
+      mostrarToast("E-mail inválido. Digite um e-mail completo (ex: nome@dominio.com).", "alerta");
+      inputChave.focus();
+      return;
+    }
+
+    if (tipo === "aleatoria" && !validarAleatoriaPix(chave)) {
+      mostrarToast("Chave aleatória inválida (mínimo de 32 caracteres).", "alerta");
+      inputChave.focus();
       return;
     }
 
@@ -761,8 +907,9 @@ function configurarFormPixCasa() {
     }
 
     sessionStorage.removeItem(`cache_pix_${casaId}`);
+    limparCacheDashboard();
     msg.textContent = "";
-    mostrarToast("Chave Pix da casa atualizada com sucesso!");
+    mostrarToast("Chave Pix da casa validada e salva com sucesso!");
     await carregarPixCasa();
   };
 }

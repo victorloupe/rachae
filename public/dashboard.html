@@ -31,19 +31,33 @@
 
   <main id="app-main">
     <div class="container">
-      <!-- Cabeçalho da Casa -->
-      <div class="card-casa-topo">
+      <!-- Cabeçalho especial exibido apenas na impressão/PDF -->
+    <div class="cabecalho-print-relatorio" style="display: none;">
+      <div style="display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid #0f172a; padding-bottom: 10px; margin-bottom: 16px;">
         <div>
-          <h2 id="dash-nome-casa" class="titulo-casa-topo">Minha Casa</h2>
-          <span id="dash-numero-casa" class="numero-casa-tag" style="display: none;"></span>
+          <h1 style="margin: 0; font-size: 22px; color: #0f172a;">Rachaê — Fechamento Mensal de Despesas</h1>
+          <p id="print-info-casa" style="margin: 4px 0 0; font-size: 14px; color: #475569;">Casa: Carregando...</p>
         </div>
-        <a class="btn-trocar-casa" href="casa.html?trocar=1" title="Trocar de casa">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-          </svg>
-          <span>Trocar casa</span>
-        </a>
+        <div style="text-align: right;">
+          <h3 id="print-info-mes" style="margin: 0; font-size: 16px; color: #0f172a;">Mês</h3>
+          <span id="print-info-emissao" style="font-size: 11px; color: #64748b;"></span>
+        </div>
       </div>
+    </div>
+
+    <!-- Barra de Contexto da Casa Atual -->
+    <div class="card-casa-topo">
+      <div>
+        <h2 id="dash-nome-casa" class="titulo-casa-topo">Minha Casa</h2>
+        <span id="dash-numero-casa" class="numero-casa-tag" style="display: none;"></span>
+      </div>
+      <a class="btn-trocar-casa" href="casa.html?trocar=1" title="Trocar de casa">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+        </svg>
+        <span>Trocar casa</span>
+      </a>
+    </div>
 
     <!-- Seletor de Mês -->
     <div class="seletor-mes">
@@ -70,7 +84,10 @@
       <div class="card-metrica">
         <span class="titulo-metrica">Total da Casa</span>
         <span class="valor-metrica" id="metrica-total-casa">R$ 0,00</span>
-        <span class="sub-metrica" id="metrica-contas-qtd">0 contas</span>
+        <div style="display: flex; align-items: center; gap: 6px; margin-top: 4px; flex-wrap: wrap;">
+          <span class="sub-metrica" id="metrica-contas-qtd">0 contas</span>
+          <span id="badge-comparativo-mes" class="badge-comparativo-mes" style="display: none;"></span>
+        </div>
       </div>
 
       <div class="card-metrica">
@@ -90,6 +107,9 @@
       </div>
     </div>
 
+    <!-- Alertas de Vencimento (Urgências e Contas Vencidas) -->
+    <div id="container-alertas-vencimento"></div>
+
     <!-- Banner Inteligente de Ação Rápida Pessoal (Sua Cota) -->
     <div id="container-alerta-pessoal"></div>
 
@@ -107,7 +127,15 @@
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
             </svg>
-            <span>Resumo do Grupo</span>
+            <span>Resumo</span>
+          </button>
+          <button id="btn-exportar-relatorio" type="button" class="btn-detalhe-acao btn-relatorio-acao" title="Exportar fechamento do mês (PDF / Imprimir)">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="6 9 6 2 18 2 18 9"></polyline>
+              <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+              <rect x="6" y="14" width="12" height="8"></rect>
+            </svg>
+            <span>Relatório</span>
           </button>
         </div>
       </div>

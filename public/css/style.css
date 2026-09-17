@@ -25,6 +25,58 @@
   --raio-sm: 8px;
 }
 
+[data-tema="dark"] {
+  --cor-primaria: #3b82f6;
+  --cor-primaria-hover: #2563eb;
+  --cor-destaque: #3b82f6;
+  --cor-destaque-hover: #60a5fa;
+  --cor-sucesso: #34d399;
+  --cor-sucesso-fundo: rgba(16, 185, 129, 0.15);
+  --cor-sucesso-texto: #6ee7b7;
+  --cor-alerta: #f87171;
+  --cor-alerta-fundo: rgba(239, 68, 68, 0.15);
+  --cor-alerta-texto: #fca5a5;
+  --cor-aviso: #fbbf24;
+  --cor-aviso-fundo: rgba(245, 158, 11, 0.15);
+  --cor-aviso-texto: #fde68a;
+  --cor-fundo: #0a0f1d;
+  --cor-card: #131b2e;
+  --cor-texto: #f8fafc;
+  --cor-texto-suave: #94a3b8;
+  --cor-texto-mutado: #64748b;
+  --cor-borda: #1e293b;
+  --cor-borda-foco: #334155;
+  --sombra-card: 0 1px 3px 0 rgba(0, 0, 0, 0.3), 0 1px 2px -1px rgba(0, 0, 0, 0.2);
+  --sombra-flutuante: 0 12px 24px -4px rgba(0, 0, 0, 0.5), 0 4px 6px -2px rgba(0, 0, 0, 0.3);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-tema="light"]) {
+    --cor-primaria: #3b82f6;
+    --cor-primaria-hover: #2563eb;
+    --cor-destaque: #3b82f6;
+    --cor-destaque-hover: #60a5fa;
+    --cor-sucesso: #34d399;
+    --cor-sucesso-fundo: rgba(16, 185, 129, 0.15);
+    --cor-sucesso-texto: #6ee7b7;
+    --cor-alerta: #f87171;
+    --cor-alerta-fundo: rgba(239, 68, 68, 0.15);
+    --cor-alerta-texto: #fca5a5;
+    --cor-aviso: #fbbf24;
+    --cor-aviso-fundo: rgba(245, 158, 11, 0.15);
+    --cor-aviso-texto: #fde68a;
+    --cor-fundo: #0a0f1d;
+    --cor-card: #131b2e;
+    --cor-texto: #f8fafc;
+    --cor-texto-suave: #94a3b8;
+    --cor-texto-mutado: #64748b;
+    --cor-borda: #1e293b;
+    --cor-borda-foco: #334155;
+    --sombra-card: 0 1px 3px 0 rgba(0, 0, 0, 0.3), 0 1px 2px -1px rgba(0, 0, 0, 0.2);
+    --sombra-flutuante: 0 12px 24px -4px rgba(0, 0, 0, 0.5), 0 4px 6px -2px rgba(0, 0, 0, 0.3);
+  }
+}
+
 * {
   box-sizing: border-box;
 }
@@ -183,7 +235,7 @@ input, select {
   border-radius: var(--raio-sm);
   font-size: 14px;
   color: var(--cor-texto);
-  background: #ffffff;
+  background: var(--cor-card);
   transition: border-color 0.15s, box-shadow 0.15s;
   outline: none;
 }
@@ -221,14 +273,14 @@ button:active {
 }
 
 button.secundario {
-  background: #ffffff;
+  background: var(--cor-card);
   color: var(--cor-texto);
   border: 1px solid var(--cor-borda);
 }
 
 button.secundario:hover {
-  background: #f1f5f9;
-  border-color: #cbd5e1;
+  background: var(--cor-fundo);
+  border-color: var(--cor-borda-foco);
 }
 
 button.pequeno {
@@ -497,7 +549,7 @@ button.sucesso-btn:hover,
   font-weight: 600;
   color: var(--cor-texto-suave);
   text-decoration: none;
-  background: #f8fafc;
+  background: var(--cor-card);
   border: 1px solid var(--cor-borda);
   padding: 7px 12px;
   border-radius: var(--raio-sm);
@@ -506,16 +558,16 @@ button.sucesso-btn:hover,
 }
 
 .btn-trocar-casa:hover {
-  background: #f1f5f9;
+  background: var(--cor-fundo);
   color: var(--cor-texto);
-  border-color: #cbd5e1;
+  border-color: var(--cor-borda-foco);
 }
 
 .icone-casa-destaque {
   width: 40px;
   height: 40px;
   border-radius: 10px;
-  background: #f8fafc;
+  background: var(--cor-card);
   border: 1px solid var(--cor-borda);
   display: flex;
   align-items: center;
@@ -545,15 +597,15 @@ button.sucesso-btn:hover,
   width: auto;
   margin: 0;
   padding: 6px 10px;
-  background: transparent;
+  background: var(--cor-card);
   color: var(--cor-texto);
   border: 1px solid var(--cor-borda);
   border-radius: 6px;
 }
 
 .btn-mes:hover {
-  background: #f1f5f9;
-  border-color: #cbd5e1;
+  background: var(--cor-fundo);
+  border-color: var(--cor-borda-foco);
 }
 
 /* Grid de Métricas / Resumo */
@@ -1249,7 +1301,7 @@ button.sucesso-btn:hover,
 }
 
 .modal-card-sistema {
-  background: #ffffff;
+  background: var(--cor-card);
   border-radius: 16px;
   max-width: 370px;
   width: 100%;
@@ -1428,8 +1480,8 @@ button.sucesso-btn:hover,
 }
 
 .btn-filtro.ativo {
-  background: #ffffff !important;
-  color: #0f172a !important;
+  background: var(--cor-card) !important;
+  color: var(--cor-texto) !important;
   font-weight: 700 !important;
   box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.08), 0 1px 2px -1px rgba(0, 0, 0, 0.04) !important;
 }
@@ -1445,8 +1497,8 @@ button.sucesso-btn:hover,
 }
 
 .btn-filtro.ativo .badge-contagem {
-  background: #0f172a;
-  color: #ffffff;
+  background: var(--cor-texto);
+  color: var(--cor-card);
 }
 
 .badge-contagem.pendente {
@@ -1893,6 +1945,7 @@ button.sucesso-btn:hover,
 .topo-acoes-usuario {
   display: inline-flex;
   align-items: center;
+  gap: 8px;
   margin: 0 !important;
   padding: 0 !important;
 }
@@ -2312,3 +2365,258 @@ button.sucesso-btn:hover,
     padding: 20px 16px !important;
   }
 }
+
+/* ============================================================
+   Botão Alternador de Tema (Dark / Light)
+   ============================================================ */
+.btn-toggle-tema {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  margin: 0;
+  border-radius: 999px;
+  background: var(--cor-card);
+  border: 1px solid var(--cor-borda);
+  color: var(--cor-texto);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.btn-toggle-tema:hover {
+  background: var(--cor-fundo);
+  border-color: var(--cor-borda-foco);
+  transform: scale(1.04);
+}
+
+.btn-toggle-tema:active {
+  transform: scale(0.96);
+}
+
+/* Ícones de Sol / Lua */
+.btn-toggle-tema .icone-sol {
+  display: none;
+  color: #fbbf24;
+}
+
+.btn-toggle-tema .icone-lua {
+  display: block;
+  color: var(--cor-texto-suave);
+}
+
+[data-tema="dark"] .btn-toggle-tema .icone-lua {
+  display: none;
+}
+
+[data-tema="dark"] .btn-toggle-tema .icone-sol {
+  display: block;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-tema="light"]) .btn-toggle-tema .icone-lua {
+    display: none;
+  }
+  :root:not([data-tema="light"]) .btn-toggle-tema .icone-sol {
+    display: block;
+  }
+}
+
+/* ============================================================
+   Banner de Instalação PWA (Mobile App)
+   ============================================================ */
+.banner-pwa-instalar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--cor-card);
+  border: 1px solid var(--cor-borda);
+  border-left: 4px solid var(--cor-destaque);
+  border-radius: var(--raio);
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  box-shadow: var(--sombra-card);
+}
+
+.banner-pwa-conteudo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.banner-pwa-icone {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.banner-pwa-texto strong {
+  display: block;
+  font-size: 13px;
+  color: var(--cor-texto);
+}
+
+.banner-pwa-texto span {
+  font-size: 11px;
+  color: var(--cor-texto-suave);
+}
+
+.banner-pwa-acoes {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.btn-pwa-instalar {
+  width: auto !important;
+  margin: 0 !important;
+  padding: 7px 12px !important;
+  font-size: 12px !important;
+  background: var(--cor-destaque) !important;
+  color: #ffffff !important;
+  border-radius: 6px !important;
+}
+
+.btn-pwa-fechar {
+  background: transparent !important;
+  border: none !important;
+  color: var(--cor-texto-mutado) !important;
+  padding: 6px !important;
+  margin: 0 !important;
+  width: auto !important;
+  cursor: pointer;
+}
+
+/* ============================================================
+   Alertas Inteligentes de Vencimento
+   ============================================================ */
+.card-alerta-vencimento {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  font-weight: 500;
+  border: 1px solid transparent;
+}
+
+.card-alerta-vencimento.urgente {
+  background: var(--cor-alerta-fundo);
+  color: var(--cor-alerta-texto);
+  border-color: rgba(239, 68, 68, 0.2);
+}
+
+.card-alerta-vencimento.atencao {
+  background: var(--cor-aviso-fundo);
+  color: var(--cor-aviso-texto);
+  border-color: rgba(245, 158, 11, 0.2);
+}
+
+.card-alerta-vencimento-esq {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ============================================================
+   Comparativo com Mês Anterior
+   ============================================================ */
+.badge-comparativo-mes {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 999px;
+  margin-top: 4px;
+}
+
+.badge-comparativo-mes.menor {
+  background: var(--cor-sucesso-fundo);
+  color: var(--cor-sucesso-texto);
+}
+
+.badge-comparativo-mes.maior {
+  background: var(--cor-alerta-fundo);
+  color: var(--cor-alerta-texto);
+}
+
+.badge-comparativo-mes.igual {
+  background: var(--cor-fundo);
+  color: var(--cor-texto-suave);
+  border: 1px solid var(--cor-borda);
+}
+
+/* Ação de Relatório */
+.btn-relatorio-acao {
+  background: var(--cor-fundo) !important;
+  color: var(--cor-texto) !important;
+  border: 1px solid var(--cor-borda) !important;
+}
+
+.btn-relatorio-acao:hover {
+  background: var(--cor-card) !important;
+  border-color: var(--cor-borda-foco) !important;
+}
+
+/* ============================================================
+   Estilos de Impressão (PDF / Relatório de Fechamento)
+   ============================================================ */
+@media print {
+  header.topo,
+  .rodape-nav,
+  .btn-mes,
+  .btn-mes-atual,
+  .grid-acoes-detalhe,
+  .filtros-container,
+  .btn-trocar-casa,
+  #banner-mock-demo,
+  .banner-pwa-instalar,
+  .acoes-linha,
+  #container-alerta-pessoal,
+  #container-alertas-vencimento,
+  .btn-toggle-tema {
+    display: none !important;
+  }
+
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-size: 12pt;
+  }
+
+  .container {
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .card, .card-metrica {
+    box-shadow: none !important;
+    border: 1px solid #ccc !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  .titulo-casa-topo {
+    font-size: 20pt !important;
+  }
+
+  .cabecalho-print-relatorio {
+    display: block !important;
+    margin-bottom: 20px;
+    border-bottom: 2px solid #000;
+    padding-bottom: 12px;
+  }
+}
+

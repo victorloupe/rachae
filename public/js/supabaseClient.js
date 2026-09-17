@@ -158,6 +158,22 @@ function atualizarHeaderUsuarioUI(perfil) {
   const primeiroNome = obterPrimeiroNome(perfil.nome);
 
   containerAcoes.innerHTML = `
+    <button type="button" class="btn-toggle-tema" id="btn-toggle-tema" onclick="alternarTema()" title="Alternar tema claro/escuro" aria-label="Alternar tema">
+      <svg class="icone-lua" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+      </svg>
+      <svg class="icone-sol" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="5"></circle>
+        <line x1="12" y1="1" x2="12" y2="3"></line>
+        <line x1="12" y1="21" x2="12" y2="23"></line>
+        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+        <line x1="1" y1="12" x2="3" y2="12"></line>
+        <line x1="21" y1="12" x2="23" y2="12"></line>
+        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+      </svg>
+    </button>
     <button type="button" class="btn-usuario-topo" id="btn-usuario-topo" onclick="abrirModalPerfil()" title="${perfil.nome} (clique para editar perfil ou sair)">
       <span class="avatar-topo" id="avatar-topo">${iniciais}</span>
       <span class="nome-topo" id="nome-topo">${primeiroNome}</span>
@@ -882,7 +898,30 @@ window.alternarSecaoSenha = alternarSecaoSenha;
 window.alternarVisibilidadeSenhaPerfil = alternarVisibilidadeSenhaPerfil;
 
 // ============================================================
-// Registro de Service Worker (PWA)
+// Gerenciamento de Tema (Dark / Light Mode)
+// ============================================================
+function inicializarTema() {
+  const temaSalvo = localStorage.getItem("rachae_tema");
+  if (temaSalvo) {
+    document.documentElement.setAttribute("data-tema", temaSalvo);
+  } else {
+    const prefereDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    document.documentElement.setAttribute("data-tema", prefereDark ? "dark" : "light");
+  }
+}
+
+function alternarTema() {
+  const temaAtual = document.documentElement.getAttribute("data-tema");
+  const novoTema = temaAtual === "dark" ? "light" : "dark";
+  document.documentElement.setAttribute("data-tema", novoTema);
+  localStorage.setItem("rachae_tema", novoTema);
+}
+
+window.alternarTema = alternarTema;
+inicializarTema();
+
+// ============================================================
+// Registro de Service Worker e Banner de Instalação PWA
 // ============================================================
 if ("serviceWorker" in navigator && window.location.protocol.startsWith("http")) {
   window.addEventListener("load", () => {
@@ -891,3 +930,63 @@ if ("serviceWorker" in navigator && window.location.protocol.startsWith("http"))
     });
   });
 }
+
+let deferredPromptPWA = null;
+
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  deferredPromptPWA = e;
+
+  const dispensado = localStorage.getItem("pwa_prompt_dispensado");
+  const ehStandalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone;
+  if (ehStandalone || (dispensado && Date.now() - Number(dispensado) < 7 * 24 * 60 * 60 * 1000)) {
+    return;
+  }
+
+  // Espera a página estar carregada para exibir o banner
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", exibirBannerInstalacaoPWA);
+  } else {
+    exibirBannerInstalacaoPWA();
+  }
+});
+
+function exibirBannerInstalacaoPWA() {
+  if (document.getElementById("banner-pwa-instalar")) return;
+  const container = document.querySelector("#app-main .container") || document.querySelector(".container");
+  if (!container) return;
+
+  const banner = document.createElement("div");
+  banner.id = "banner-pwa-instalar";
+  banner.className = "banner-pwa-instalar";
+  banner.innerHTML = `
+    <div class="banner-pwa-conteudo">
+      <img src="assets/icon.jpg" alt="Rachaê" class="banner-pwa-icone" />
+      <div class="banner-pwa-texto">
+        <strong>Instalar Rachaê no celular</strong>
+        <span>Acesse suas contas e Pix com 1 toque</span>
+      </div>
+    </div>
+    <div class="banner-pwa-acoes">
+      <button type="button" class="btn-pwa-instalar" onclick="instalarAppPWA()">Instalar</button>
+      <button type="button" class="btn-pwa-fechar" onclick="fecharBannerPWA()" title="Dispensar">✕</button>
+    </div>
+  `;
+  container.prepend(banner);
+}
+
+window.instalarAppPWA = async function () {
+  if (deferredPromptPWA) {
+    deferredPromptPWA.prompt();
+    const { outcome } = await deferredPromptPWA.userChoice;
+    deferredPromptPWA = null;
+    fecharBannerPWA();
+  }
+};
+
+window.fecharBannerPWA = function () {
+  const el = document.getElementById("banner-pwa-instalar");
+  if (el) el.remove();
+  localStorage.setItem("pwa_prompt_dispensado", String(Date.now()));
+};
+
