@@ -43,35 +43,33 @@ async function processarConviteAposAutenticacao(usuarioId) {
   if (!codigo) return null;
 
   try {
-    const { data: convite, error } = await supabaseClient
-      .from("convites")
-      .select("id, casa_id, usado, expira_em, casas ( id, nome )")
-      .eq("codigo", codigo)
-      .eq("usado", false)
-      .maybeSingle();
+    // aceitar_convite() roda no banco (security definer): valida o
+    // convite, adiciona o morador e marca o convite como usado numa
+    // única transação atômica. Substitui o antigo select+insert+update
+    // direto na tabela convites/membros_casa, que dependia de policies
+    // de RLS abertas demais (qualquer autenticado podia entrar em
+    // qualquer casa sem convite).
+    const { data, error } = await supabaseClient.rpc("aceitar_convite", { p_codigo: codigo });
 
-    if (convite && convite.casa_id) {
-      // Adiciona o morador à casa
-      await supabaseClient.from("membros_casa").insert({
-        casa_id: convite.casa_id,
-        usuario_id: usuarioId,
-        papel: "morador",
-      });
+    if (!error && data) {
+      const resultado = Array.isArray(data) ? data[0] : data;
+      if (resultado && resultado.casa_id) {
+        localStorage.setItem("casa_atual", resultado.casa_id);
+        localStorage.setItem("casa_papel", "morador");
+        if (resultado.casa_nome) {
+          localStorage.setItem("casa_nome", resultado.casa_nome);
+        }
+        if (resultado.casa_numero) {
+          localStorage.setItem("casa_numero", resultado.casa_numero);
+        }
+        sessionStorage.removeItem("pendente_convite");
+        localStorage.removeItem("pendente_convite");
 
-      // Marca convite como utilizado
-      await supabaseClient.from("convites").update({ usado: true }).eq("id", convite.id);
-
-      // Define a casa ativa
-      localStorage.setItem("casa_atual", convite.casa_id);
-      localStorage.setItem("casa_papel", "morador");
-      const c = Array.isArray(convite.casas) ? convite.casas[0] : convite.casas;
-      if (c && c.nome) {
-        localStorage.setItem("casa_nome", c.nome);
+        return resultado.casa_nome || "a casa";
       }
-      sessionStorage.removeItem("pendente_convite");
-      localStorage.removeItem("pendente_convite");
-
-      return c ? c.nome : "a casa";
+    }
+    if (error) {
+      console.warn("Erro ao vincular convite automaticamente:", error.message);
     }
   } catch (err) {
     console.warn("Erro ao vincular convite automaticamente:", err);
@@ -102,15 +100,14 @@ async function processarConviteAposAutenticacao(usuarioId) {
 
   // Busca dados do convite para exibir o nome da casa
   try {
-    const { data: convite } = await supabaseClient
-      .from("convites")
-      .select("id, casa_id, codigo, expira_em, usado, casas ( id, nome )")
-      .eq("codigo", codigo)
-      .eq("usado", false)
-      .maybeSingle();
+    // consultar_convite() é security definer: valida o código exato sem
+    // expor a tabela inteira de convites (antes, qualquer autenticado
+    // podia listar os convites de todas as casas).
+    const { data } = await supabaseClient.rpc("consultar_convite", { p_codigo: codigo });
+    const convite = Array.isArray(data) ? data[0] : data;
 
-    if (convite && convite.casas) {
-      const nomeCasa = convite.casas.nome;
+    if (convite && convite.valido && convite.casa_nome) {
+      const nomeCasa = convite.casa_nome;
       const banner = document.getElementById("banner-convite-container");
       if (banner) {
         banner.innerHTML = `

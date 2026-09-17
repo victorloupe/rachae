@@ -10,7 +10,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="apple-touch-icon" href="assets/icon.jpg" />
   <link rel="manifest" href="manifest.json" />
-  <link rel="stylesheet" href="css/style.css?v=6" />
+  <link rel="stylesheet" href="css/style.css?v=11" />
 </head>
 <body>
   <header class="topo">
@@ -47,7 +47,7 @@
       <span class="sub-metrica" id="orcamento-media">R$ 0,00 por morador</span>
     </div>
 
-    <div class="card">
+    <div class="card" id="card-contas-fixas">
       <h2>Contas fixas da casa</h2>
       <div id="lista-contas"><p class="texto-suave">Carregando...</p></div>
     </div>
@@ -81,13 +81,38 @@
           </div>
         </div>
 
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px;">
+          <div>
+            <label for="pix-nome-titular">Nome do titular</label>
+            <input type="text" id="pix-nome-titular" placeholder="Nome de quem recebe" />
+          </div>
+          <div>
+            <label for="pix-banco">Banco</label>
+            <input type="text" id="pix-banco" placeholder="Ex: Nubank, Itaú..." />
+          </div>
+        </div>
+        <span class="texto-suave" style="font-size: 11px; display: block; margin-top: 4px;">
+          Ajuda os moradores a conferir se estão pagando a pessoa certa antes de fazer o Pix.
+        </span>
+
         <button type="submit" id="btn-salvar-pix" style="margin-top: 12px;">Salvar Chave Pix</button>
         <p id="msg-pix-casa"></p>
       </form>
 
       <div id="visualizacao-pix-morador" style="display: none; background: var(--cor-fundo); padding: 12px; border-radius: 8px; border: 1px solid var(--cor-borda);">
         <span style="font-size: 12px; font-weight: 600; color: var(--cor-texto-suave); text-transform: uppercase; letter-spacing: 0.04em; display: block;">Chave Pix Oficial</span>
-        <div id="txt-pix-morador" style="font-size: 16px; font-weight: 700; color: var(--cor-texto); margin-top: 4px;">Nenhuma chave configurada</div>
+        <div id="txt-pix-morador-titular" style="display: none; font-size: 13px; font-weight: 600; color: var(--cor-texto); margin-top: 6px;"></div>
+        <div id="txt-pix-morador-banco" style="display: none; font-size: 12px; color: var(--cor-texto-suave); margin-top: 1px;"></div>
+        <div style="display: flex; align-items: center; gap: 8px; margin-top: 6px;">
+          <div id="txt-pix-morador" style="font-size: 16px; font-weight: 700; color: var(--cor-texto); flex: 1;">Nenhuma chave configurada</div>
+          <button type="button" id="btn-copiar-pix-morador" class="secundario pequeno" style="display: none; width: auto; margin: 0; padding: 8px 12px; white-space: nowrap;" onclick="copiarChavePixMorador()">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 4px;">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+            </svg>
+            Copiar
+          </button>
+        </div>
       </div>
     </div>
 
@@ -106,96 +131,208 @@
     <div class="card" id="card-nova-conta">
       <h2>Nova conta fixa</h2>
       <form id="form-nova-conta">
-        <label for="nome">Nome da conta</label>
-        <input type="text" id="nome" placeholder="Ex: Aluguel, Luz, Internet" required />
+        <div class="secao-form">
+          <p class="secao-form-titulo">Informações básicas</p>
+          <label for="nome">Nome da conta</label>
+          <input type="text" id="nome" placeholder="Ex: Aluguel, Luz, Internet" required />
 
-        <label for="valor">Valor (R$)</label>
-        <input type="number" id="valor" step="0.01" min="0" required placeholder="0.00" />
-
-        <label for="tipo-valor">O valor muda todo mês?</label>
-        <select id="tipo-valor">
-          <option value="fixo">Não, é sempre o mesmo valor</option>
-          <option value="variavel">Sim, varia mês a mês (ex: luz, água)</option>
-        </select>
-
-        <label for="dia-vencimento">Dia do vencimento</label>
-        <input type="number" id="dia-vencimento" min="1" max="28" required placeholder="Ex: 10" />
-
-        <label for="quando-iniciar">Quando começa a cobrança?</label>
-        <select id="quando-iniciar">
-          <option value="atual" id="opt-mes-atual">A partir deste mês</option>
-          <option value="proximo" id="opt-mes-proximo">A partir do próximo mês</option>
-          <option value="personalizado">Escolher outro mês...</option>
-        </select>
-        <div id="bloco-mes-inicio-personalizado" style="display:none; margin-top:8px;">
-          <label for="mes-inicio">Mês de início:</label>
-          <input type="month" id="mes-inicio" />
-        </div>
-
-        <label for="forma-divisao">Como divide entre os moradores?</label>
-        <select id="forma-divisao">
-          <option value="igual">Igual para todos</option>
-          <option value="individual">Apenas um morador específico</option>
-        </select>
-
-        <div id="bloco-morador-especifico" style="display:none; margin-top:10px; background:var(--cor-fundo); padding:10px 12px; border-radius:8px; border:1px solid var(--cor-borda);">
-          <label for="morador-especifico" style="font-weight:600; color:var(--cor-texto);">Quem é o morador responsável?</label>
-          <select id="morador-especifico">
-            <option value="">Carregando moradores...</option>
+          <label for="categoria-conta">Categoria</label>
+          <select id="categoria-conta">
+            <option value="moradia">Moradia (aluguel, condomínio...)</option>
+            <option value="contas">Água / Luz / Internet</option>
+            <option value="alimentacao">Alimentação</option>
+            <option value="lazer">Lazer</option>
+            <option value="outros" selected>Outros</option>
           </select>
-          <p class="texto-suave" style="font-size:11px; margin:4px 0 0;">Esta conta será cobrada 100% apenas deste morador, sem ratear com os demais.</p>
+
+          <label for="valor">Valor (R$)</label>
+          <input type="number" id="valor" step="0.01" min="0" required placeholder="0.00" />
         </div>
 
-        <button type="submit" style="margin-top:12px;">Adicionar conta</button>
+        <div class="secao-form">
+          <p class="secao-form-titulo">Cobrança</p>
+          <label for="tipo-valor">O valor muda todo mês?</label>
+          <select id="tipo-valor">
+            <option value="fixo">Não, é sempre o mesmo valor</option>
+            <option value="variavel">Sim, varia mês a mês (ex: luz, água)</option>
+          </select>
+
+          <label for="dia-vencimento">Dia do vencimento</label>
+          <input type="number" id="dia-vencimento" min="1" max="28" required placeholder="Ex: 10" />
+
+          <label for="quando-iniciar">Quando começa a cobrança?</label>
+          <select id="quando-iniciar">
+            <option value="atual" id="opt-mes-atual">A partir deste mês</option>
+            <option value="proximo" id="opt-mes-proximo">A partir do próximo mês</option>
+            <option value="personalizado">Escolher outro mês...</option>
+          </select>
+          <div id="bloco-mes-inicio-personalizado" style="display:none; margin-top:8px;">
+            <label for="mes-inicio">Mês de início:</label>
+            <input type="month" id="mes-inicio" />
+          </div>
+
+          <label class="opcao-destaque" for="conta-parcelada">
+            <input type="checkbox" id="conta-parcelada" />
+            <span class="opcao-destaque-texto">
+              <strong>Conta parcelada</strong>
+              <span>Ex: TV em 10x — a cobrança para sozinha depois da última parcela.</span>
+            </span>
+          </label>
+          <div id="bloco-parcelas" style="display:none; margin-top:8px;">
+            <label for="parcelas-total">Quantas parcelas?</label>
+            <input type="number" id="parcelas-total" min="2" max="120" placeholder="Ex: 10" />
+            <p class="texto-suave" style="font-size:11px; margin:4px 0 0;">O mês escolhido acima ("Quando começa a cobrança?") vira a parcela 1. Depois da última parcela a cobrança para sozinha.</p>
+          </div>
+        </div>
+
+        <div class="secao-form">
+          <p class="secao-form-titulo">Divisão entre os moradores</p>
+          <label for="forma-divisao">Como divide entre os moradores?</label>
+          <select id="forma-divisao">
+            <option value="igual">Igual para todos</option>
+            <option value="percentual">Percentual customizado (ex: 60%/40%)</option>
+            <option value="individual">Apenas um morador específico (pública)</option>
+            <option value="individual_privada">Individual Privada (apenas para o morador)</option>
+          </select>
+
+          <div id="bloco-percentual" style="display:none; margin-top:10px; background:var(--cor-fundo); padding:10px 12px; border-radius:8px; border:1px solid var(--cor-borda);">
+            <label style="font-weight:600; color:var(--cor-texto); margin-bottom: 6px; display:block;">Percentual de cada morador</label>
+            <div id="lista-percentual-moradores"></div>
+            <p style="margin-top:6px; font-size:12px;">Total: <strong id="total-percentual">0%</strong></p>
+          </div>
+
+          <label class="opcao-destaque" for="rateio-proporcional" id="bloco-rateio-proporcional">
+            <input type="checkbox" id="rateio-proporcional" />
+            <span class="opcao-destaque-texto">
+              <strong>Ratear proporcionalmente para quem entrar no meio do mês</strong>
+              <span id="dica-rateio-proporcional">Quem se mudar pra casa depois do início do mês paga só a parte proporcional aos dias que morou, em vez de dividir igual desde o dia 1.</span>
+            </span>
+          </label>
+
+          <div id="bloco-morador-especifico" style="display:none; margin-top:10px; background:var(--cor-fundo); padding:10px 12px; border-radius:8px; border:1px solid var(--cor-borda);">
+            <label for="morador-especifico" style="font-weight:600; color:var(--cor-texto);">Quem é o morador responsável?</label>
+            <select id="morador-especifico">
+              <option value="">Carregando moradores...</option>
+            </select>
+            <label class="opcao-destaque" for="conta-privada" style="margin-top: 8px;">
+              <input type="checkbox" id="conta-privada" />
+              <span class="opcao-destaque-texto">
+                <strong style="display:flex; align-items:center; gap:5px;">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                  Conta privada
+                </strong>
+                <span>Esta conta só aparecerá para você (administrador) e para o morador selecionado.</span>
+              </span>
+            </label>
+          </div>
+        </div>
+
+        <button type="submit" style="margin-top:16px;">Adicionar conta</button>
         <p id="msg-nova-conta"></p>
       </form>
     </div>
 
   <!-- Modal de Edição de Conta Fixa -->
   <div id="modal-editar-conta" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.6); align-items:center; justify-content:center; z-index:999; backdrop-filter:blur(3px);">
-    <div class="card" style="max-width:380px; margin:16px; width:100%; box-shadow:var(--sombra-flutuante);">
+    <div class="card" style="max-width:380px; margin:16px; width:100%; max-height:85vh; overflow-y:auto; box-shadow:var(--sombra-flutuante);">
       <h2>Editar Conta Fixa</h2>
       <form id="form-editar-conta">
         <input type="hidden" id="edit-id" />
 
-        <label for="edit-nome">Nome da conta</label>
-        <input type="text" id="edit-nome" required />
+        <div class="secao-form">
+          <p class="secao-form-titulo">Informações básicas</p>
+          <label for="edit-nome">Nome da conta</label>
+          <input type="text" id="edit-nome" required />
 
-        <label for="edit-valor">Valor (R$)</label>
-        <input type="number" id="edit-valor" step="0.01" min="0" required />
+          <label for="edit-categoria-conta">Categoria</label>
+          <select id="edit-categoria-conta">
+            <option value="moradia">Moradia (aluguel, condomínio...)</option>
+            <option value="contas">Água / Luz / Internet</option>
+            <option value="alimentacao">Alimentação</option>
+            <option value="lazer">Lazer</option>
+            <option value="outros">Outros</option>
+          </select>
 
-        <label for="edit-tipo-valor">O valor muda todo mês?</label>
-        <select id="edit-tipo-valor">
-          <option value="fixo">Não, é sempre o mesmo valor</option>
-          <option value="variavel">Sim, varia mês a mês (ex: luz, água)</option>
-        </select>
-
-        <label for="edit-dia-vencimento">Dia do vencimento</label>
-        <input type="number" id="edit-dia-vencimento" min="1" max="28" required />
-
-        <label for="edit-quando-iniciar">Quando começa a cobrança?</label>
-        <select id="edit-quando-iniciar">
-          <option value="atual" id="edit-opt-mes-atual">A partir deste mês</option>
-          <option value="proximo" id="edit-opt-mes-proximo">A partir do próximo mês</option>
-          <option value="personalizado">Escolher outro mês...</option>
-        </select>
-        <div id="edit-bloco-mes-inicio-personalizado" style="display:none; margin-top:8px;">
-          <label for="edit-mes-inicio">Mês de início:</label>
-          <input type="month" id="edit-mes-inicio" />
+          <label for="edit-valor">Valor (R$)</label>
+          <input type="number" id="edit-valor" step="0.01" min="0" required />
         </div>
 
-        <label for="edit-forma-divisao">Como divide entre os moradores?</label>
-        <select id="edit-forma-divisao">
-          <option value="igual">Igual para todos</option>
-          <option value="individual">Apenas um morador específico</option>
-        </select>
-
-        <div id="edit-bloco-morador-especifico" style="display:none; margin-top:10px; background:var(--cor-fundo); padding:10px 12px; border-radius:8px; border:1px solid var(--cor-borda);">
-          <label for="edit-morador-especifico" style="font-weight:600; color:var(--cor-texto);">Quem é o morador responsável?</label>
-          <select id="edit-morador-especifico">
-            <option value="">Carregando moradores...</option>
+        <div class="secao-form">
+          <p class="secao-form-titulo">Cobrança</p>
+          <label for="edit-tipo-valor">O valor muda todo mês?</label>
+          <select id="edit-tipo-valor">
+            <option value="fixo">Não, é sempre o mesmo valor</option>
+            <option value="variavel">Sim, varia mês a mês (ex: luz, água)</option>
           </select>
-          <p class="texto-suave" style="font-size:11px; margin:4px 0 0;">Esta conta será cobrada 100% apenas deste morador, sem ratear com os demais.</p>
+
+          <label for="edit-dia-vencimento">Dia do vencimento</label>
+          <input type="number" id="edit-dia-vencimento" min="1" max="28" required />
+
+          <label for="edit-quando-iniciar">Quando começa a cobrança?</label>
+          <select id="edit-quando-iniciar">
+            <option value="atual" id="edit-opt-mes-atual">A partir deste mês</option>
+            <option value="proximo" id="edit-opt-mes-proximo">A partir do próximo mês</option>
+            <option value="personalizado">Escolher outro mês...</option>
+          </select>
+          <div id="edit-bloco-mes-inicio-personalizado" style="display:none; margin-top:8px;">
+            <label for="edit-mes-inicio">Mês de início:</label>
+            <input type="month" id="edit-mes-inicio" />
+          </div>
+
+          <label class="opcao-destaque" for="edit-conta-parcelada">
+            <input type="checkbox" id="edit-conta-parcelada" />
+            <span class="opcao-destaque-texto">
+              <strong>Conta parcelada</strong>
+              <span>Ex: TV em 10x — a cobrança para sozinha depois da última parcela.</span>
+            </span>
+          </label>
+          <div id="edit-bloco-parcelas" style="display:none; margin-top:8px;">
+            <label for="edit-parcelas-total">Quantas parcelas?</label>
+            <input type="number" id="edit-parcelas-total" min="2" max="120" placeholder="Ex: 10" />
+          </div>
+        </div>
+
+        <div class="secao-form">
+          <p class="secao-form-titulo">Divisão entre os moradores</p>
+          <label for="edit-forma-divisao">Como divide entre os moradores?</label>
+          <select id="edit-forma-divisao">
+            <option value="igual">Igual para todos</option>
+            <option value="percentual">Percentual customizado (ex: 60%/40%)</option>
+            <option value="individual">Apenas um morador específico (pública)</option>
+            <option value="individual_privada">Individual Privada (apenas para o morador)</option>
+          </select>
+
+          <div id="edit-bloco-percentual" style="display:none; margin-top:10px; background:var(--cor-fundo); padding:10px 12px; border-radius:8px; border:1px solid var(--cor-borda);">
+            <label style="font-weight:600; color:var(--cor-texto); margin-bottom: 6px; display:block;">Percentual de cada morador</label>
+            <div id="edit-lista-percentual-moradores"></div>
+            <p style="margin-top:6px; font-size:12px;">Total: <strong id="edit-total-percentual">0%</strong></p>
+          </div>
+
+          <label class="opcao-destaque" for="edit-rateio-proporcional" id="edit-bloco-rateio-proporcional">
+            <input type="checkbox" id="edit-rateio-proporcional" />
+            <span class="opcao-destaque-texto">
+              <strong>Ratear proporcionalmente para quem entrar no meio do mês</strong>
+              <span>Quem se mudar pra casa depois do início do mês paga só a parte proporcional aos dias que morou.</span>
+            </span>
+          </label>
+
+          <div id="edit-bloco-morador-especifico" style="display:none; margin-top:10px; background:var(--cor-fundo); padding:10px 12px; border-radius:8px; border:1px solid var(--cor-borda);">
+            <label for="edit-morador-especifico" style="font-weight:600; color:var(--cor-texto);">Quem é o morador responsável?</label>
+            <select id="edit-morador-especifico">
+              <option value="">Carregando moradores...</option>
+            </select>
+            <label class="opcao-destaque" for="edit-conta-privada" style="margin-top: 8px;">
+              <input type="checkbox" id="edit-conta-privada" />
+              <span class="opcao-destaque-texto">
+                <strong style="display:flex; align-items:center; gap:5px;">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                  Conta privada
+                </strong>
+                <span>Esta conta só aparecerá para você (administrador) e para o morador selecionado.</span>
+              </span>
+            </label>
+          </div>
+        </div>
         </div>
 
         <button type="submit" style="margin-top:12px;">Salvar Alterações</button>
@@ -237,14 +374,14 @@
 
   <!-- GSAP & Animações -->
   <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
-  <script src="js/animacoes.js"></script>
+  <script src="js/animacoes.js?v=11"></script>
 
   <!-- Supabase JS CDN (v2) -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="js/config.js"></script>
-  <script src="js/mockClient.js"></script>
-  <script src="js/supabaseClient.js"></script>
-  <script src="js/instantNav.js"></script>
-  <script src="js/contas.js"></script>
+  <script src="js/config.js?v=11"></script>
+  <script src="js/mockClient.js?v=11"></script>
+  <script src="js/supabaseClient.js?v=11"></script>
+  <script src="js/instantNav.js?v=11"></script>
+  <script src="js/contas.js?v=11"></script>
 </body>
 </html>

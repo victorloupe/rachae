@@ -131,6 +131,80 @@ const Animacoes = (() => {
     });
   }
 
+  // Animação da barra de arrecadação segmentada (pago / atrasado / pendente)
+  function animarBarraSegmentada({ segPago, segAtrasado, segPendente }, { pctPago, pctAtrasado, pctPendente }, duracao = 0.5) {
+    const alvos = [
+      [segPago, pctPago],
+      [segAtrasado, pctAtrasado],
+      [segPendente, pctPendente],
+    ];
+
+    if (!gsapDisponivel() || prefereReducao) {
+      alvos.forEach(([el, pct]) => {
+        if (el) el.style.width = `${Math.max(0, Math.min(100, pct))}%`;
+      });
+      return;
+    }
+
+    alvos.forEach(([el, pct]) => {
+      if (!el) return;
+      gsap.killTweensOf(el);
+      gsap.to(el, {
+        width: `${Math.max(0, Math.min(100, pct))}%`,
+        duration: duracao,
+        ease: "power2.out",
+      });
+    });
+  }
+
+  // Confete simples ao fechar 100% do mês (sem dependências externas além do GSAP já carregado)
+  function animarConfete() {
+    if (prefereReducao) return;
+
+    const cores = ["#2563eb", "#10b981", "#f59e0b", "#dc2626", "#7c3aed", "#0891b2"];
+    const total = 32;
+    const container = document.createElement("div");
+    container.style.cssText = "position:fixed; inset:0; pointer-events:none; z-index:9999; overflow:hidden;";
+    document.body.appendChild(container);
+
+    const pecas = [];
+    for (let i = 0; i < total; i++) {
+      const peca = document.createElement("div");
+      const cor = cores[i % cores.length];
+      const tamanho = 6 + Math.random() * 6;
+      peca.style.cssText = `position:absolute; top:-20px; left:${Math.random() * 100}%; width:${tamanho}px; height:${tamanho * 0.4}px; background:${cor}; border-radius:2px; opacity:0.95;`;
+      container.appendChild(peca);
+      pecas.push(peca);
+    }
+
+    if (!gsapDisponivel()) {
+      // Sem GSAP: fallback com CSS transitions simples
+      pecas.forEach((peca) => {
+        peca.style.transition = "transform 1.2s ease-in, opacity 1.2s ease-in";
+        requestAnimationFrame(() => {
+          peca.style.transform = `translateY(${window.innerHeight + 40}px) rotate(${Math.random() * 360}deg)`;
+          peca.style.opacity = "0";
+        });
+      });
+      setTimeout(() => container.remove(), 1400);
+      return;
+    }
+
+    pecas.forEach((peca) => {
+      gsap.to(peca, {
+        y: window.innerHeight + 40,
+        x: (Math.random() - 0.5) * 160,
+        rotation: Math.random() * 720 - 360,
+        opacity: 0,
+        duration: 1.1 + Math.random() * 0.6,
+        ease: "power1.in",
+        delay: Math.random() * 0.3,
+      });
+    });
+
+    setTimeout(() => container.remove(), 2200);
+  }
+
   // Animação em cascata (stagger) para listas de linhas
   function animarListaLinhas(seletorOuElementos, duracao = 0.28) {
     if (!gsapDisponivel() || prefereReducao) return;
@@ -274,6 +348,8 @@ const Animacoes = (() => {
     animarNumeroMoeda,
     animarNumeroFracionario,
     animarBarraProgresso,
+    animarBarraSegmentada,
+    animarConfete,
     animarListaLinhas,
     animarAberturaModal,
     animarFechamentoModal,

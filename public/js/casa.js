@@ -187,47 +187,28 @@ document.getElementById("form-entrar-convite").addEventListener("submit", async 
 
   const codigo = document.getElementById("codigo-convite").value.trim();
 
-  const { data: convite, error } = await supabaseClient
-    .from("convites")
-    .select("*, casas (*)")
-    .eq("codigo", codigo)
-    .eq("usado", false)
-    .gt("expira_em", new Date().toISOString())
-    .single();
+  // aceitar_convite() roda no banco (security definer): valida o convite,
+  // adiciona o morador e marca o convite como usado numa única transação
+  // atômica. Substitui o antigo select+insert+update direto nas tabelas
+  // convites/membros_casa, que dependia de policies de RLS abertas demais
+  // (qualquer autenticado podia entrar em qualquer casa sem convite).
+  const { data, error } = await supabaseClient.rpc("aceitar_convite", { p_codigo: codigo });
 
-  if (error || !convite) {
+  if (error || !data) {
     msg.className = "erro";
-    msg.textContent = "Convite inválido ou expirado.";
+    msg.textContent = error && /não encontrado|expirou|utilizado/i.test(error.message)
+      ? error.message
+      : "Convite inválido ou expirado.";
     return;
   }
 
-  const {
-    data: { user },
-  } = await supabaseClient.auth.getUser();
-
-  const { error: erroMembro } = await supabaseClient.from("membros_casa").insert({
-    casa_id: convite.casa_id,
-    usuario_id: user.id,
-    papel: "morador",
-  });
-
-  if (erroMembro) {
-    msg.className = "erro";
-    msg.textContent = erroMembro.message.includes("duplicate")
-      ? "Você já faz parte dessa casa."
-      : "Erro ao entrar na casa.";
-    return;
-  }
-
-  // Marca o convite como usado
-  await supabaseClient.from("convites").update({ usado: true }).eq("id", convite.id);
+  const resultado = Array.isArray(data) ? data[0] : data;
 
   msg.className = "sucesso";
   msg.textContent = "Você entrou na casa!";
-  localStorage.setItem("casa_atual", convite.casa_id);
-  const c = Array.isArray(convite.casas) ? convite.casas[0] : convite.casas;
-  if (c && c.nome) localStorage.setItem("casa_nome", c.nome);
-  if (c && c.numero) localStorage.setItem("casa_numero", c.numero);
+  localStorage.setItem("casa_atual", resultado.casa_id);
+  if (resultado.casa_nome) localStorage.setItem("casa_nome", resultado.casa_nome);
+  if (resultado.casa_numero) localStorage.setItem("casa_numero", resultado.casa_numero);
   localStorage.setItem("casa_papel", "morador");
   setTimeout(() => (window.location.href = "dashboard.html"), 800);
 });

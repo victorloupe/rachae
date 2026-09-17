@@ -5,9 +5,38 @@
 
 (() => {
 let casaId = null;
+let usuarioAtualId = null;
 let papelUsuario = "morador";
 let listaContasAtuais = [];
 let listaMembrosCasa = [];
+
+function obterContasPrivadasLocais() {
+  try {
+    const raw = localStorage.getItem(`contas_privadas_${casaId}`);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function registrarContaPrivadaLocal(contaId, ehPrivada) {
+  try {
+    let ids = obterContasPrivadasLocais();
+    if (ehPrivada) {
+      if (!ids.includes(contaId)) ids.push(contaId);
+    } else {
+      ids = ids.filter((id) => id !== contaId);
+    }
+    localStorage.setItem(`contas_privadas_${casaId}`, JSON.stringify(ids));
+  } catch (e) {}
+}
+
+function ehContaPrivada(c) {
+  if (!c) return false;
+  if (c.privada === true || c.forma_divisao === "individual_privada") return true;
+  const idsLocais = obterContasPrivadasLocais();
+  return idsLocais.includes(c.id);
+}
 
 const MESES_NOMES = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -29,6 +58,7 @@ function obterNomeMesAno(yyyymm) {
 async function inicializarContas() {
   const session = await exigirLogin();
   if (!session) return;
+  usuarioAtualId = session.user.id;
 
   casaId = localStorage.getItem("casa_atual");
   if (!casaId) {
@@ -145,22 +175,138 @@ function configurarSeletorInicio() {
       editBlocoCustom.style.display = editSelectQuando.value === "personalizado" ? "block" : "none";
     };
   }
+
+  // Conta parcelada (nova conta)
+  const checkParcelada = document.getElementById("conta-parcelada");
+  const blocoParcelas = document.getElementById("bloco-parcelas");
+  if (checkParcelada && blocoParcelas) {
+    checkParcelada.onchange = () => {
+      blocoParcelas.style.display = checkParcelada.checked ? "block" : "none";
+    };
+  }
+
+  // Conta parcelada (editar conta)
+  const editCheckParcelada = document.getElementById("edit-conta-parcelada");
+  const editBlocoParcelas = document.getElementById("edit-bloco-parcelas");
+  if (editCheckParcelada && editBlocoParcelas) {
+    editCheckParcelada.onchange = () => {
+      editBlocoParcelas.style.display = editCheckParcelada.checked ? "block" : "none";
+    };
+  }
+}
+
+function renderizarInputsPercentual(containerId, totalId, valoresIniciais = {}) {
+  const container = document.getElementById(containerId);
+  const totalEl = document.getElementById(totalId);
+  if (!container) return;
+
+  if (listaMembrosCasa.length === 0) {
+    container.innerHTML = `<p class="texto-suave" style="font-size:12px;">Carregando moradores...</p>`;
+    return;
+  }
+
+  const restante = listaMembrosCasa.length > 0 ? Math.round((100 / listaMembrosCasa.length) * 100) / 100 : 0;
+
+  container.innerHTML = listaMembrosCasa
+    .map((m, idx) => {
+      const valorSalvo = valoresIniciais[m.usuario_id];
+      const valorInicial = valorSalvo !== undefined ? valorSalvo : restante;
+      return `
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:6px;">
+          <span style="font-size:13px;">${m.nome}</span>
+          <input type="number" min="0" max="100" step="0.1" data-usuario-id="${m.usuario_id}" class="input-percentual-morador" value="${valorInicial}" style="width:80px; margin:0; padding:6px 8px; font-size:13px;" />
+        </div>
+      `;
+    })
+    .join("");
+
+  const atualizarTotal = () => {
+    const inputs = container.querySelectorAll(".input-percentual-morador");
+    let total = 0;
+    inputs.forEach((inp) => { total += parseFloat(inp.value) || 0; });
+    if (totalEl) {
+      totalEl.textContent = `${Math.round(total * 100) / 100}%`;
+      totalEl.style.color = Math.abs(total - 100) < 0.05 ? "var(--cor-sucesso)" : "var(--cor-alerta)";
+    }
+  };
+
+  container.querySelectorAll(".input-percentual-morador").forEach((inp) => {
+    inp.oninput = atualizarTotal;
+  });
+
+  atualizarTotal();
+}
+
+function obterValoresPercentual(containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return [];
+  return Array.from(container.querySelectorAll(".input-percentual-morador")).map((inp) => ({
+    usuario_id: inp.dataset.usuarioId,
+    percentual: parseFloat(inp.value) || 0,
+  }));
 }
 
 function configurarSeletorDivisao() {
   const formaSelect = document.getElementById("forma-divisao");
   const blocoEspecifico = document.getElementById("bloco-morador-especifico");
+  const checkPrivada = document.getElementById("conta-privada");
+
+  const blocoRateio = document.getElementById("bloco-rateio-proporcional");
+  const dicaRateio = document.getElementById("dica-rateio-proporcional");
+  const blocoPercentual = document.getElementById("bloco-percentual");
+
   if (formaSelect && blocoEspecifico) {
     formaSelect.onchange = () => {
-      blocoEspecifico.style.display = formaSelect.value === "individual" ? "block" : "none";
+      const isIndiv = formaSelect.value === "individual" || formaSelect.value === "individual_privada";
+      const isPercentual = formaSelect.value === "percentual";
+      blocoEspecifico.style.display = isIndiv ? "block" : "none";
+      if (checkPrivada) {
+        checkPrivada.checked = formaSelect.value === "individual_privada";
+      }
+      if (blocoRateio) blocoRateio.style.display = formaSelect.value === "igual" ? "flex" : "none";
+      if (dicaRateio) dicaRateio.style.display = formaSelect.value === "igual" ? "block" : "none";
+      if (blocoPercentual) blocoPercentual.style.display = isPercentual ? "block" : "none";
+      if (isPercentual) renderizarInputsPercentual("lista-percentual-moradores", "total-percentual");
+    };
+  }
+
+  if (checkPrivada && formaSelect) {
+    checkPrivada.onchange = () => {
+      if (checkPrivada.checked) {
+        formaSelect.value = "individual_privada";
+      } else if (formaSelect.value === "individual_privada") {
+        formaSelect.value = "individual";
+      }
     };
   }
 
   const editFormaSelect = document.getElementById("edit-forma-divisao");
   const editBlocoEspecifico = document.getElementById("edit-bloco-morador-especifico");
+  const editCheckPrivada = document.getElementById("edit-conta-privada");
+  const editBlocoRateio = document.getElementById("edit-bloco-rateio-proporcional");
+  const editBlocoPercentual = document.getElementById("edit-bloco-percentual");
+
   if (editFormaSelect && editBlocoEspecifico) {
     editFormaSelect.onchange = () => {
-      editBlocoEspecifico.style.display = editFormaSelect.value === "individual" ? "block" : "none";
+      const isIndiv = editFormaSelect.value === "individual" || editFormaSelect.value === "individual_privada";
+      const isPercentual = editFormaSelect.value === "percentual";
+      editBlocoEspecifico.style.display = isIndiv ? "block" : "none";
+      if (editCheckPrivada) {
+        editCheckPrivada.checked = editFormaSelect.value === "individual_privada";
+      }
+      if (editBlocoRateio) editBlocoRateio.style.display = editFormaSelect.value === "igual" ? "flex" : "none";
+      if (editBlocoPercentual) editBlocoPercentual.style.display = isPercentual ? "block" : "none";
+      if (isPercentual) renderizarInputsPercentual("edit-lista-percentual-moradores", "edit-total-percentual");
+    };
+  }
+
+  if (editCheckPrivada && editFormaSelect) {
+    editCheckPrivada.onchange = () => {
+      if (editCheckPrivada.checked) {
+        editFormaSelect.value = "individual_privada";
+      } else if (editFormaSelect.value === "individual_privada") {
+        editFormaSelect.value = "individual";
+      }
     };
   }
 }
@@ -169,16 +315,38 @@ function renderizarContasNaTela(contas, animar = false) {
   const container = document.getElementById("lista-contas");
   if (!container) return;
 
-  if (!contas || contas.length === 0) {
-    container.innerHTML = `<p class="vazio">Nenhuma conta fixa cadastrada ainda.</p>`;
+  const ehAdmin = papelUsuario === "admin";
+  const hojeYYYYMM = obterMesFormatadoYYYYMM();
+
+  // Filtra contas privadas para não-admins:
+  // Se o morador atual não for admin E a conta for privada E não pertencer a ele, ela É OCULTA!
+  const contasVisiveis = (contas || []).filter((c) => {
+    if (ehAdmin) return true;
+    if (ehContaPrivada(c)) {
+      return c.morador_especifico_id === usuarioAtualId;
+    }
+    return true;
+  });
+
+  if (contasVisiveis.length === 0) {
+    container.innerHTML = `
+      <div class="estado-vazio">
+        <div class="estado-vazio-icone neutro">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="12" y1="18" x2="12" y2="12"/>
+            <line x1="9" y1="15" x2="15" y2="15"/>
+          </svg>
+        </div>
+        <h4>Nenhuma conta cadastrada</h4>
+        <p>Cadastre as despesas fixas da casa (como luz, internet, água) para começar a dividir com os moradores.</p>
+      </div>
+    `;
     return;
   }
 
-  const ehAdmin = papelUsuario === "admin";
-
-  const hojeYYYYMM = obterMesFormatadoYYYYMM();
-
-  container.innerHTML = contas
+  container.innerHTML = contasVisiveis
     .map(
       (c) => {
         const comecaFuturo = c.mes_inicio && c.mes_inicio.slice(0, 7) > hojeYYYYMM;
@@ -186,10 +354,25 @@ function renderizarContasNaTela(contas, animar = false) {
           ? `<span class="badge" style="font-size: 11px; background: #e0f2fe; color: #0369a1; border-color: #bae6fd; font-weight: 600; margin-left: 6px;">Começa em ${obterNomeMesAno(c.mes_inicio.slice(0, 7))}</span>`
           : "";
 
+        const privada = ehContaPrivada(c);
+        const tagPrivada = privada
+          ? `<span class="badge privada" style="margin-left: 6px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg> Privada</span>`
+          : "";
+
+        let tagParcela = "";
+        if (c.parcelado && c.parcelas_total) {
+          const parcelaAtual = calcularParcelaAtual(c, hojeYYYYMM);
+          tagParcela = parcelaAtual
+            ? `<span class="badge" style="font-size: 11px; background: #ede9fe; color: #6d28d9; border-color: #ddd6fe; font-weight: 600; margin-left: 6px;">Parcela ${parcelaAtual}/${c.parcelas_total}</span>`
+            : `<span class="badge neutro" style="font-size: 11px; font-weight: 600; margin-left: 6px;">Parcelas concluídas (${c.parcelas_total}/${c.parcelas_total})</span>`;
+        }
+
+        const tagCategoria = gerarBadgeCategoria(c.categoria);
+
         return `
       <div class="linha">
         <div>
-          <strong>${c.nome}</strong>${tagInicio}<br/>
+          <strong>${c.nome}</strong>${tagCategoria}${tagPrivada}${tagInicio}${tagParcela}<br/>
           <span class="texto-suave">
             ${formatarMoeda(c.valor_padrao)}
             ${c.tipo_valor === "variavel" ? "(variável)" : ""}
@@ -270,9 +453,18 @@ async function carregarContas() {
 
   listaContasAtuais = contas || [];
 
+  // Filtra contas visíveis para o usuário atual para cálculo de orçamento
+  const contasParaCalculo = listaContasAtuais.filter((c) => {
+    if (papelUsuario === "admin") return true;
+    if (ehContaPrivada(c)) {
+      return c.morador_especifico_id === usuarioAtualId;
+    }
+    return true;
+  });
+
   // Calcular orçamento fixo previsto e média por morador considerando apenas contas vigentes no mês atual
   const hojeYYYYMM = obterMesFormatadoYYYYMM();
-  const contasVigentesHoje = listaContasAtuais.filter((c) => {
+  const contasVigentesHoje = contasParaCalculo.filter((c) => {
     if (!c.mes_inicio) return true;
     return hojeYYYYMM >= c.mes_inicio.slice(0, 7);
   });
@@ -314,17 +506,19 @@ async function carregarContas() {
 
 function textoFormaDivisao(conta) {
   if (typeof conta === "object" && conta !== null) {
-    if (conta.forma_divisao === "individual") {
+    const privada = ehContaPrivada(conta);
+    if (conta.forma_divisao === "individual" || conta.forma_divisao === "individual_privada" || privada) {
       const morador = listaMembrosCasa.find((m) => m.usuario_id === conta.morador_especifico_id);
-      return `exclusiva para ${morador ? morador.nome : "morador específico"}`;
+      const rotulo = privada ? "privada para" : "exclusiva para";
+      return `${rotulo} ${morador ? morador.nome : "morador específico"}`;
     }
-    return { igual: "igual para todos", peso: "por peso", fixo: "valor fixo" }[conta.forma_divisao] || conta.forma_divisao;
+    return { igual: "igual para todos", peso: "por peso", fixo: "valor fixo", percentual: "percentual customizado" }[conta.forma_divisao] || conta.forma_divisao;
   }
-  return { igual: "igual para todos", peso: "por peso", fixo: "valor fixo", individual: "individual" }[conta] || conta;
+  return { igual: "igual para todos", peso: "por peso", fixo: "valor fixo", individual: "individual", percentual: "percentual customizado" }[conta] || conta;
 }
 
 // --- MODAL DE EDIÇÃO ---
-function abrirModalEditar(contaId) {
+async function abrirModalEditar(contaId) {
   if (papelUsuario !== "admin") {
     mostrarToast("Apenas o administrador pode editar contas.", "alerta");
     return;
@@ -333,26 +527,72 @@ function abrirModalEditar(contaId) {
   const conta = listaContasAtuais.find((c) => c.id === contaId);
   if (!conta) return;
 
+  const privada = ehContaPrivada(conta);
+
   document.getElementById("edit-id").value = conta.id;
   document.getElementById("edit-nome").value = conta.nome;
+  const editSelectCategoria = document.getElementById("edit-categoria-conta");
+  if (editSelectCategoria) editSelectCategoria.value = conta.categoria || "outros";
   document.getElementById("edit-valor").value = conta.valor_padrao;
   document.getElementById("edit-tipo-valor").value = conta.tipo_valor || "fixo";
   document.getElementById("edit-dia-vencimento").value = conta.dia_vencimento;
-  document.getElementById("edit-forma-divisao").value = conta.forma_divisao || "igual";
   document.getElementById("msg-editar-conta").textContent = "";
 
-  // Configura campo de morador específico
+  // Configura campo de morador específico e checkbox de privada
   const editBlocoMorador = document.getElementById("edit-bloco-morador-especifico");
   const editSelectMorador = document.getElementById("edit-morador-especifico");
-  if (editBlocoMorador && editSelectMorador) {
-    if (conta.forma_divisao === "individual") {
-      editBlocoMorador.style.display = "block";
-      editSelectMorador.value = conta.morador_especifico_id || "";
-    } else {
-      editBlocoMorador.style.display = "none";
-      editSelectMorador.value = "";
+  const editCheckPrivada = document.getElementById("edit-conta-privada");
+
+  const editBlocoRateio = document.getElementById("edit-bloco-rateio-proporcional");
+  const editCheckRateio = document.getElementById("edit-rateio-proporcional");
+
+  const editBlocoPercentual = document.getElementById("edit-bloco-percentual");
+
+  if (conta.forma_divisao === "individual" || conta.forma_divisao === "individual_privada" || privada) {
+    document.getElementById("edit-forma-divisao").value = privada ? "individual_privada" : "individual";
+    if (editBlocoMorador) editBlocoMorador.style.display = "block";
+    if (editSelectMorador) editSelectMorador.value = conta.morador_especifico_id || "";
+    if (editCheckPrivada) editCheckPrivada.checked = privada;
+    if (editBlocoRateio) editBlocoRateio.style.display = "none";
+    if (editCheckRateio) editCheckRateio.checked = false;
+    if (editBlocoPercentual) editBlocoPercentual.style.display = "none";
+  } else if (conta.forma_divisao === "percentual") {
+    document.getElementById("edit-forma-divisao").value = "percentual";
+    if (editBlocoMorador) editBlocoMorador.style.display = "none";
+    if (editSelectMorador) editSelectMorador.value = "";
+    if (editCheckPrivada) editCheckPrivada.checked = false;
+    if (editBlocoRateio) editBlocoRateio.style.display = "none";
+    if (editCheckRateio) editCheckRateio.checked = false;
+    if (editBlocoPercentual) editBlocoPercentual.style.display = "block";
+
+    let valoresIniciais = {};
+    try {
+      const { data: divisoes } = await supabaseClient
+        .from("divisao_conta")
+        .select("usuario_id, peso_ou_valor")
+        .eq("conta_fixa_id", conta.id);
+      (divisoes || []).forEach((d) => { valoresIniciais[d.usuario_id] = Number(d.peso_ou_valor); });
+    } catch (e) {
+      console.warn("Erro ao carregar divisão por percentual:", e);
     }
+    renderizarInputsPercentual("edit-lista-percentual-moradores", "edit-total-percentual", valoresIniciais);
+  } else {
+    document.getElementById("edit-forma-divisao").value = conta.forma_divisao || "igual";
+    if (editBlocoMorador) editBlocoMorador.style.display = "none";
+    if (editSelectMorador) editSelectMorador.value = "";
+    if (editCheckPrivada) editCheckPrivada.checked = false;
+    if (editBlocoRateio) editBlocoRateio.style.display = "flex";
+    if (editCheckRateio) editCheckRateio.checked = Boolean(conta.rateio_proporcional);
+    if (editBlocoPercentual) editBlocoPercentual.style.display = "none";
   }
+
+  // Configura conta parcelada
+  const editCheckParcelada = document.getElementById("edit-conta-parcelada");
+  const editBlocoParcelas = document.getElementById("edit-bloco-parcelas");
+  const editInputParcelasTotal = document.getElementById("edit-parcelas-total");
+  if (editCheckParcelada) editCheckParcelada.checked = Boolean(conta.parcelado);
+  if (editBlocoParcelas) editBlocoParcelas.style.display = conta.parcelado ? "block" : "none";
+  if (editInputParcelasTotal) editInputParcelasTotal.value = conta.parcelas_total || "";
 
   // Configura seletor de mês de início
   const editSelectQuando = document.getElementById("edit-quando-iniciar");
@@ -428,13 +668,25 @@ function configurarFormEditar() {
     const tipoValor = document.getElementById("edit-tipo-valor").value;
     const diaVencimento = parseInt(document.getElementById("edit-dia-vencimento").value, 10);
     const formaDivisao = document.getElementById("edit-forma-divisao").value;
+    const ehPrivada = formaDivisao === "individual_privada" || Boolean(document.getElementById("edit-conta-privada")?.checked);
 
     let moradorEspecificoId = null;
-    if (formaDivisao === "individual") {
+    if (formaDivisao === "individual" || formaDivisao === "individual_privada") {
       moradorEspecificoId = document.getElementById("edit-morador-especifico").value || null;
       if (!moradorEspecificoId) {
         msg.className = "erro";
         msg.textContent = "Por favor, selecione quem é o morador responsável.";
+        return;
+      }
+    }
+
+    let valoresPercentual = [];
+    if (formaDivisao === "percentual") {
+      valoresPercentual = obterValoresPercentual("edit-lista-percentual-moradores");
+      const totalPercentual = valoresPercentual.reduce((acc, v) => acc + v.percentual, 0);
+      if (Math.abs(totalPercentual - 100) > 0.5) {
+        msg.className = "erro";
+        msg.textContent = `Os percentuais precisam somar 100% (está em ${Math.round(totalPercentual * 100) / 100}%).`;
         return;
       }
     }
@@ -451,35 +703,50 @@ function configurarFormEditar() {
       mesInicio = document.getElementById("edit-mes-inicio").value || obterMesFormatadoYYYYMM(hoje);
     }
 
+    const ehRateioProporcional =
+      formaDivisao === "igual" && Boolean(document.getElementById("edit-rateio-proporcional")?.checked);
+
+    const ehParcelada = Boolean(document.getElementById("edit-conta-parcelada")?.checked);
+    const parcelasTotal = ehParcelada ? parseInt(document.getElementById("edit-parcelas-total")?.value, 10) : null;
+    if (ehParcelada && (!parcelasTotal || parcelasTotal < 2)) {
+      msg.className = "erro";
+      msg.textContent = "Informe quantas parcelas essa conta tem (pelo menos 2).";
+      return;
+    }
+
+    const categoriaConta = document.getElementById("edit-categoria-conta")?.value || "outros";
+
     const updatePayload = {
       nome,
       valor_padrao: valor,
       tipo_valor: tipoValor,
-      diaVencimento: diaVencimento,
       dia_vencimento: diaVencimento,
-      forma_divisao: formaDivisao,
+      forma_divisao: (formaDivisao === "individual" || formaDivisao === "individual_privada") ? "individual" : formaDivisao,
+      privada: ehPrivada,
       mes_inicio: mesInicio,
       morador_especifico_id: moradorEspecificoId,
+      rateio_proporcional: ehRateioProporcional,
+      parcelado: ehParcelada,
+      parcelas_total: parcelasTotal,
+      categoria: categoriaConta,
     };
-    delete updatePayload.diaVencimento;
 
     let { error } = await supabaseClient
       .from("contas_fixas")
       .update(updatePayload)
       .eq("id", id);
 
-    if (error && (error.message?.includes("column") || error.message?.includes("constraint"))) {
-      console.warn("Fallback de atualização sem mes_inicio/morador_especifico_id:", error);
-      const fallbackPayload = {
-        nome,
-        valor_padrao: valor,
-        tipo_valor: tipoValor,
-        dia_vencimento: diaVencimento,
-        forma_divisao: formaDivisao === "individual" ? "igual" : formaDivisao,
-      };
+    if (error && (error.message?.includes("privada") || error.message?.includes("rateio_proporcional") || error.message?.includes("parcelado") || error.message?.includes("parcelas_total") || error.message?.includes("categoria") || error.message?.includes("column") || error.message?.includes("constraint"))) {
+      console.warn("Fallback de atualização sem colunas novas (privada/rateio_proporcional/parcelado/categoria):", error);
+      const fallbackPayload = { ...updatePayload };
+      delete fallbackPayload.privada;
+      delete fallbackPayload.rateio_proporcional;
+      delete fallbackPayload.parcelado;
+      delete fallbackPayload.parcelas_total;
+      delete fallbackPayload.categoria;
+      if (fallbackPayload.forma_divisao === "individual_privada") fallbackPayload.forma_divisao = "individual";
       const resFallback = await supabaseClient.from("contas_fixas").update(fallbackPayload).eq("id", id);
       if (!resFallback.error) {
-        mostrarToast("Alterações salvas! Lembre-se de rodar a migração SQL no Supabase para ativar a divisão individual.", "alerta");
         error = null;
       }
     }
@@ -489,6 +756,21 @@ function configurarFormEditar() {
       msg.textContent = "Erro ao atualizar: " + error.message;
       return;
     }
+
+    // Sincroniza a divisão por percentual (sempre limpa antes, evita ficar
+    // divisao_conta obsoleta se a conta mudar de forma de divisão depois)
+    try {
+      await supabaseClient.from("divisao_conta").delete().eq("conta_fixa_id", id);
+      if (formaDivisao === "percentual" && valoresPercentual.length > 0) {
+        await supabaseClient.from("divisao_conta").insert(
+          valoresPercentual.map((v) => ({ conta_fixa_id: id, usuario_id: v.usuario_id, peso_ou_valor: v.percentual }))
+        );
+      }
+    } catch (e) {
+      console.warn("Erro ao salvar divisão por percentual:", e);
+    }
+
+    registrarContaPrivadaLocal(id, ehPrivada);
 
     // Invalida cache
     sessionStorage.removeItem(`cache_contas_${casaId}`);
@@ -521,6 +803,7 @@ async function desativarConta(contaId) {
     .eq("id", contaId);
 
   if (!error) {
+    registrarContaPrivadaLocal(contaId, false);
     sessionStorage.removeItem(`cache_contas_${casaId}`);
     limparCacheDashboard();
     mostrarToast("Conta removida com sucesso.");
@@ -548,13 +831,25 @@ function configurarFormNovaConta() {
     const tipoValor = document.getElementById("tipo-valor").value;
     const diaVencimento = parseInt(document.getElementById("dia-vencimento").value, 10);
     const formaDivisao = document.getElementById("forma-divisao").value;
+    const ehPrivada = formaDivisao === "individual_privada" || Boolean(document.getElementById("conta-privada")?.checked);
 
     let moradorEspecificoId = null;
-    if (formaDivisao === "individual") {
+    if (formaDivisao === "individual" || formaDivisao === "individual_privada") {
       moradorEspecificoId = document.getElementById("morador-especifico").value || null;
       if (!moradorEspecificoId) {
         msg.className = "erro";
         msg.textContent = "Por favor, selecione quem é o morador responsável.";
+        return;
+      }
+    }
+
+    let valoresPercentual = [];
+    if (formaDivisao === "percentual") {
+      valoresPercentual = obterValoresPercentual("lista-percentual-moradores");
+      const totalPercentual = valoresPercentual.reduce((acc, v) => acc + v.percentual, 0);
+      if (Math.abs(totalPercentual - 100) > 0.5) {
+        msg.className = "erro";
+        msg.textContent = `Os percentuais precisam somar 100% (está em ${Math.round(totalPercentual * 100) / 100}%).`;
         return;
       }
     }
@@ -571,36 +866,53 @@ function configurarFormNovaConta() {
       mesInicio = document.getElementById("mes-inicio").value || obterMesFormatadoYYYYMM(hoje);
     }
 
+    const ehRateioProporcional =
+      formaDivisao === "igual" && Boolean(document.getElementById("rateio-proporcional")?.checked);
+
+    const ehParcelada = Boolean(document.getElementById("conta-parcelada")?.checked);
+    const parcelasTotal = ehParcelada ? parseInt(document.getElementById("parcelas-total")?.value, 10) : null;
+    if (ehParcelada && (!parcelasTotal || parcelasTotal < 2)) {
+      msg.className = "erro";
+      msg.textContent = "Informe quantas parcelas essa conta tem (pelo menos 2).";
+      return;
+    }
+
+    const categoriaConta = document.getElementById("categoria-conta")?.value || "outros";
+
     const payload = {
       casa_id: casaId,
       nome,
       valor_padrao: valor,
       tipo_valor: tipoValor,
       dia_vencimento: diaVencimento,
-      forma_divisao: formaDivisao,
+      forma_divisao: (formaDivisao === "individual" || formaDivisao === "individual_privada") ? "individual" : formaDivisao,
+      privada: ehPrivada,
       mes_inicio: mesInicio,
       morador_especifico_id: moradorEspecificoId,
+      rateio_proporcional: ehRateioProporcional,
+      parcelado: ehParcelada,
+      parcelas_total: parcelasTotal,
+      categoria: categoriaConta,
     };
 
-    let { error } = await supabaseClient
+    let { data: inserida, error } = await supabaseClient
       .from("contas_fixas")
       .insert(payload)
       .select()
       .single();
 
-    if (error && (error.message?.includes("column") || error.message?.includes("constraint"))) {
-      console.warn("Fallback de insert sem mes_inicio/morador_especifico_id:", error);
-      const fallbackPayload = {
-        casa_id: casaId,
-        nome,
-        valor_padrao: valor,
-        tipo_valor: tipoValor,
-        dia_vencimento: diaVencimento,
-        forma_divisao: formaDivisao === "individual" ? "igual" : formaDivisao,
-      };
+    if (error && (error.message?.includes("privada") || error.message?.includes("rateio_proporcional") || error.message?.includes("parcelado") || error.message?.includes("parcelas_total") || error.message?.includes("categoria") || error.message?.includes("column") || error.message?.includes("constraint"))) {
+      console.warn("Fallback de insert sem colunas novas (privada/rateio_proporcional/parcelado/categoria):", error);
+      const fallbackPayload = { ...payload };
+      delete fallbackPayload.privada;
+      delete fallbackPayload.rateio_proporcional;
+      delete fallbackPayload.parcelado;
+      delete fallbackPayload.parcelas_total;
+      delete fallbackPayload.categoria;
+      if (fallbackPayload.forma_divisao === "individual_privada") fallbackPayload.forma_divisao = "individual";
       const resFallback = await supabaseClient.from("contas_fixas").insert(fallbackPayload).select().single();
-      if (!resFallback.error) {
-        mostrarToast("Conta adicionada! Lembre-se de rodar a migração SQL no Supabase para ativar a divisão individual.", "alerta");
+      if (!resFallback.error && resFallback.data) {
+        inserida = resFallback.data;
         error = null;
       }
     }
@@ -609,6 +921,20 @@ function configurarFormNovaConta() {
       msg.className = "erro";
       msg.textContent = "Erro ao salvar: " + error.message;
       return;
+    }
+
+    if (inserida && ehPrivada) {
+      registrarContaPrivadaLocal(inserida.id, true);
+    }
+
+    if (inserida && formaDivisao === "percentual" && valoresPercentual.length > 0) {
+      try {
+        await supabaseClient.from("divisao_conta").insert(
+          valoresPercentual.map((v) => ({ conta_fixa_id: inserida.id, usuario_id: v.usuario_id, peso_ou_valor: v.percentual }))
+        );
+      } catch (e) {
+        console.warn("Erro ao salvar divisão por percentual:", e);
+      }
     }
 
     sessionStorage.removeItem(`cache_contas_${casaId}`);
@@ -633,8 +959,13 @@ function configurarFormNovaConta() {
 function renderizarPixNaTela(casa) {
   const badge = document.getElementById("badge-pix-tipo");
   const txtMorador = document.getElementById("txt-pix-morador");
+  const txtMoradorTitular = document.getElementById("txt-pix-morador-titular");
+  const txtMoradorBanco = document.getElementById("txt-pix-morador-banco");
+  const btnCopiarMorador = document.getElementById("btn-copiar-pix-morador");
   const selectTipo = document.getElementById("pix-tipo");
   const inputChave = document.getElementById("pix-chave");
+  const inputTitular = document.getElementById("pix-nome-titular");
+  const inputBanco = document.getElementById("pix-banco");
 
   if (casa && casa.chave_pix) {
     if (badge) {
@@ -643,19 +974,38 @@ function renderizarPixNaTela(casa) {
       badge.className = "badge pago";
     }
     if (selectTipo) selectTipo.value = casa.tipo_chave_pix || "telefone";
-    if (inputChave) {
-      let chaveFormatada = casa.chave_pix;
-      if (casa.tipo_chave_pix === "telefone") chaveFormatada = formatarTelefonePix(casa.chave_pix);
-      else if (casa.tipo_chave_pix === "cpf") chaveFormatada = formatarCpfPix(casa.chave_pix);
-      else if (casa.tipo_chave_pix === "cnpj") chaveFormatada = formatarCnpjPix(casa.chave_pix);
-      inputChave.value = chaveFormatada;
-    }
+
+    let chaveFormatada = casa.chave_pix;
+    if (casa.tipo_chave_pix === "telefone") chaveFormatada = formatarTelefonePix(casa.chave_pix);
+    else if (casa.tipo_chave_pix === "cpf") chaveFormatada = formatarCpfPix(casa.chave_pix);
+    else if (casa.tipo_chave_pix === "cnpj") chaveFormatada = formatarCnpjPix(casa.chave_pix);
+
+    if (inputChave) inputChave.value = chaveFormatada;
+    if (inputTitular) inputTitular.value = casa.nome_titular_pix || "";
+    if (inputBanco) inputBanco.value = casa.banco_pix || "";
+
     if (txtMorador) {
-      let chaveFormatada = casa.chave_pix;
-      if (casa.tipo_chave_pix === "telefone") chaveFormatada = formatarTelefonePix(casa.chave_pix);
-      else if (casa.tipo_chave_pix === "cpf") chaveFormatada = formatarCpfPix(casa.chave_pix);
-      else if (casa.tipo_chave_pix === "cnpj") chaveFormatada = formatarCnpjPix(casa.chave_pix);
       txtMorador.textContent = `${chaveFormatada} (${rotuloTipoPix(casa.tipo_chave_pix)})`;
+    }
+    if (txtMoradorTitular) {
+      if (casa.nome_titular_pix) {
+        txtMoradorTitular.textContent = casa.nome_titular_pix;
+        txtMoradorTitular.style.display = "block";
+      } else {
+        txtMoradorTitular.style.display = "none";
+      }
+    }
+    if (txtMoradorBanco) {
+      if (casa.banco_pix) {
+        txtMoradorBanco.textContent = casa.banco_pix;
+        txtMoradorBanco.style.display = "block";
+      } else {
+        txtMoradorBanco.style.display = "none";
+      }
+    }
+    if (btnCopiarMorador) {
+      btnCopiarMorador.dataset.chave = casa.chave_pix;
+      btnCopiarMorador.style.display = "inline-flex";
     }
   } else {
     if (badge) {
@@ -666,8 +1016,44 @@ function renderizarPixNaTela(casa) {
     if (txtMorador) {
       txtMorador.textContent = "Nenhuma chave Pix cadastrada pelo administrador.";
     }
+    if (txtMoradorTitular) txtMoradorTitular.style.display = "none";
+    if (txtMoradorBanco) txtMoradorBanco.style.display = "none";
+    if (btnCopiarMorador) {
+      btnCopiarMorador.style.display = "none";
+      delete btnCopiarMorador.dataset.chave;
+    }
   }
 }
+
+function copiarChavePixMorador() {
+  const btn = document.getElementById("btn-copiar-pix-morador");
+  const chave = btn ? btn.dataset.chave : null;
+  if (!chave) return;
+
+  navigator.clipboard.writeText(chave);
+  mostrarToast("Chave Pix copiada!");
+
+  if (btn && !btn.disabled) {
+    const htmlOriginal = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = `
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 4px;">
+        <polyline points="20 6 9 17 4 12"/>
+      </svg>
+      Copiado!
+    `;
+
+    if (window.Animacoes) {
+      window.Animacoes.animarPulseSucesso(btn);
+    }
+
+    setTimeout(() => {
+      btn.innerHTML = htmlOriginal;
+      btn.disabled = false;
+    }, 1500);
+  }
+}
+window.copiarChavePixMorador = copiarChavePixMorador;
 
 async function carregarPixCasa() {
   const cachePixKey = `cache_pix_${casaId}`;
@@ -683,7 +1069,7 @@ async function carregarPixCasa() {
   try {
     const { data: casa } = await supabaseClient
       .from("casas")
-      .select("chave_pix, tipo_chave_pix")
+      .select("chave_pix, tipo_chave_pix, nome_titular_pix, banco_pix")
       .eq("id", casaId)
       .maybeSingle();
 
@@ -892,17 +1278,33 @@ function configurarFormPixCasa() {
     msg.className = "";
     msg.textContent = "Salvando...";
 
-    const { error } = await supabaseClient
+    const nomeTitular = document.getElementById("pix-nome-titular")?.value.trim() || null;
+    const banco = document.getElementById("pix-banco")?.value.trim() || null;
+
+    const { data: casaAtualizada, error } = await supabaseClient
       .from("casas")
       .update({
         chave_pix: chave,
         tipo_chave_pix: tipo,
+        nome_titular_pix: nomeTitular,
+        banco_pix: banco,
       })
-      .eq("id", casaId);
+      .eq("id", casaId)
+      .select("id, chave_pix, tipo_chave_pix, nome_titular_pix, banco_pix");
 
     if (error) {
       msg.className = "erro";
       msg.textContent = "Erro ao salvar chave Pix: " + error.message;
+      return;
+    }
+
+    // Se a policy de UPDATE do banco bloquear silenciosamente (RLS), o
+    // Supabase não retorna erro nenhum, só 0 linhas afetadas — sem este
+    // check, o app mostraria "salvo com sucesso" mesmo sem ter salvo nada.
+    if (!casaAtualizada || casaAtualizada.length === 0) {
+      msg.className = "erro";
+      msg.textContent = "Não foi possível salvar: você precisa ser administrador desta casa.";
+      mostrarToast("Não foi possível salvar a chave Pix. Verifique se você é administrador da casa.", "alerta");
       return;
     }
 

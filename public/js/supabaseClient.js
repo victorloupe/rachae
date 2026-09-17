@@ -97,6 +97,97 @@ function obterPrimeiroNome(nome) {
   return limpo.split(/\s+/)[0] || "Usuário";
 }
 
+// ============================================================
+// Avatares coloridos por morador (mesma cor sempre para a mesma pessoa,
+// calculada a partir do id dela — sem precisar guardar nada no banco)
+// ============================================================
+const PALETA_AVATAR = [
+  "#2563eb", "#059669", "#d97706", "#dc2626", "#7c3aed",
+  "#0891b2", "#db2777", "#65a30d", "#ea580c", "#4f46e5",
+];
+
+// ============================================================
+// Categorias das contas fixas (pra classificar Aluguel, Água, etc.)
+// ============================================================
+const CATEGORIAS_CONTA = {
+  moradia: { label: "Moradia", cor: "#2563eb", fundo: "#dbeafe" },
+  contas: { label: "Água/Luz/Internet", cor: "#0891b2", fundo: "#cffafe" },
+  alimentacao: { label: "Alimentação", cor: "#059669", fundo: "#d1fae5" },
+  lazer: { label: "Lazer", cor: "#7c3aed", fundo: "#ede9fe" },
+  outros: { label: "Outros", cor: "#64748b", fundo: "#f1f5f9" },
+};
+
+function obterCategoriaInfo(chave) {
+  return CATEGORIAS_CONTA[chave] || CATEGORIAS_CONTA.outros;
+}
+
+function gerarBadgeCategoria(chave) {
+  const info = obterCategoriaInfo(chave);
+  return `<span class="badge" style="font-size: 10px; font-weight: 600; padding: 2px 6px; margin-left: 6px; background: ${info.fundo}; color: ${info.cor}; border-color: ${info.fundo};">${info.label}</span>`;
+}
+
+function gerarIndiceAvatar(chave) {
+  const str = String(chave || "");
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash * 31 + str.charCodeAt(i)) >>> 0;
+  }
+  return hash % PALETA_AVATAR.length;
+}
+
+function gerarCorAvatar(chave) {
+  return PALETA_AVATAR[gerarIndiceAvatar(chave)];
+}
+
+// Garante que ninguém da MESMA casa fique com a cor igual à de outra
+// pessoa: parte do hash de cada um (pra manter a cor "estável" entre
+// as telas), mas se der empate com alguém já processado, desloca pro
+// próximo tom livre da paleta.
+function atribuirCoresMoradores(ids) {
+  const idsUnicos = Array.from(new Set((ids || []).filter(Boolean))).sort();
+  const usados = new Set();
+  const mapa = {};
+
+  for (const id of idsUnicos) {
+    let idx = gerarIndiceAvatar(id);
+    let tentativas = 0;
+    while (usados.has(idx) && tentativas < PALETA_AVATAR.length) {
+      idx = (idx + 1) % PALETA_AVATAR.length;
+      tentativas++;
+    }
+    usados.add(idx);
+    mapa[id] = PALETA_AVATAR[idx];
+  }
+
+  return mapa;
+}
+
+function gerarAvatarHtml(nome, id, tamanho = 32, corForcada = null) {
+  const iniciais = calcularIniciais(nome);
+  const cor = corForcada || gerarCorAvatar(id || nome || "");
+  const fonte = Math.max(10, Math.round(tamanho * 0.36));
+  return `<span class="avatar-morador" style="width:${tamanho}px; height:${tamanho}px; min-width:${tamanho}px; background:${cor}; font-size:${fonte}px;">${iniciais}</span>`;
+}
+
+// ============================================================
+// Contas parceladas (ex.: uma TV comprada em 10x): mes_inicio é o
+// mês da parcela 1, e a conta some sozinha da cobrança depois da
+// última parcela — sem precisar o admin desativar na mão.
+// ============================================================
+function calcularParcelaAtual(conta, mesReferenciaYYYYMM) {
+  if (!conta || !conta.parcelado || !conta.parcelas_total || !conta.mes_inicio) return null;
+
+  const [anoIni, mesIni] = conta.mes_inicio.slice(0, 7).split("-").map((v) => parseInt(v, 10));
+  const [anoRef, mesRef] = String(mesReferenciaYYYYMM).slice(0, 7).split("-").map((v) => parseInt(v, 10));
+  if (!anoIni || !mesIni || !anoRef || !mesRef) return null;
+
+  const diffMeses = (anoRef - anoIni) * 12 + (mesRef - mesIni);
+  const parcelaAtual = diffMeses + 1;
+
+  if (parcelaAtual < 1 || parcelaAtual > conta.parcelas_total) return null;
+  return parcelaAtual;
+}
+
 async function inicializarPerfilUsuario(user) {
   if (!user) return;
 

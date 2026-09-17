@@ -201,6 +201,73 @@ header.topo {
   box-shadow: var(--sombra-card);
 }
 
+/* Agrupa campos de formulário em seções visuais claras (ex: Nova Conta) */
+.secao-form {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px dashed var(--cor-borda);
+}
+
+.secao-form:first-of-type {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+.secao-form-titulo {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--cor-destaque);
+  margin: 0 0 2px 0;
+}
+
+/* Checkbox destacado em formato de card clicável (ex: "Conta parcelada") */
+.opcao-destaque {
+  margin-top: 12px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: var(--cor-fundo);
+  padding: 12px 14px;
+  border-radius: var(--raio-sm);
+  border: 1px solid var(--cor-borda);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.opcao-destaque:hover {
+  border-color: var(--cor-destaque);
+}
+
+.opcao-destaque input[type="checkbox"] {
+  width: 18px !important;
+  height: 18px;
+  margin: 2px 0 0 0 !important;
+  cursor: pointer;
+  flex-shrink: 0;
+  accent-color: var(--cor-destaque);
+}
+
+.opcao-destaque-texto {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.opcao-destaque-texto strong {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--cor-texto);
+}
+
+.opcao-destaque-texto span {
+  font-size: 11.5px;
+  color: var(--cor-texto-suave);
+  line-height: 1.4;
+}
+
 h2 {
   font-size: 18px;
   font-weight: 600;
@@ -354,6 +421,65 @@ button.sucesso-btn:hover,
 .badge.atrasado {
   background: var(--cor-alerta-fundo);
   color: var(--cor-alerta-texto);
+}
+
+.badge.privada {
+  background: var(--cor-aviso-fundo);
+  color: var(--cor-aviso-texto);
+}
+
+.badge.privada svg {
+  color: currentColor;
+}
+
+/* Card "Contas fixas da casa" — versão compacta */
+#card-contas-fixas {
+  padding: 16px;
+}
+
+#card-contas-fixas h2 {
+  margin-bottom: 6px;
+}
+
+#lista-contas .linha {
+  padding: 10px 0;
+  gap: 8px;
+}
+
+#lista-contas .btn-icone {
+  width: 30px;
+  height: 30px;
+}
+
+#lista-contas .acoes-linha {
+  gap: 6px;
+}
+
+/* Card "Nova conta fixa" — versão compacta */
+#card-nova-conta {
+  padding: 16px;
+}
+
+#card-nova-conta h2 {
+  margin-bottom: 10px;
+}
+
+#card-nova-conta label {
+  margin-top: 8px;
+  margin-bottom: 4px;
+}
+
+#card-nova-conta input,
+#card-nova-conta select {
+  padding: 8px 12px;
+}
+
+#card-nova-conta button[type="submit"] {
+  margin-top: 10px;
+}
+
+#card-nova-conta #bloco-morador-especifico {
+  padding: 8px 10px;
 }
 
 .texto-suave {
@@ -626,19 +752,30 @@ button.sucesso-btn:hover,
 .grid-metricas {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-  margin-bottom: 16px;
+  gap: 8px;
+  margin-bottom: 12px;
 }
 
 .card-metrica {
   background: var(--cor-card);
   border: 1px solid var(--cor-borda);
   border-radius: var(--raio);
-  padding: 16px 14px;
+  padding: 12px 12px;
   box-shadow: var(--sombra-card);
   display: flex;
   flex-direction: column;
+  align-items: center;
   justify-content: space-between;
+  text-align: center;
+}
+
+.card-metrica .linha-sub-metrica {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  width: 100%;
 }
 
 .card-metrica .titulo-metrica {
@@ -686,6 +823,53 @@ button.sucesso-btn:hover,
   will-change: transform;
 }
 
+.barra-progresso-segmentada {
+  display: flex;
+  align-items: stretch;
+}
+
+.barra-segmento {
+  height: 100%;
+  width: 0%;
+  transition: width 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.barra-segmento-pago {
+  background: var(--cor-sucesso);
+}
+
+.barra-segmento-atrasado {
+  background: var(--cor-alerta);
+}
+
+.barra-segmento-pendente {
+  background: var(--cor-aviso);
+}
+
+.legenda-barra-segmentada {
+  display: flex;
+  gap: 12px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+  width: 100%;
+}
+
+.legenda-barra-segmentada span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10.5px;
+  color: var(--cor-texto-suave);
+}
+
+.legenda-barra-segmentada i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
 /* Cabeçalho da Seção Detalhamento */
 .cabecalho-secao-detalhe {
   display: flex;
@@ -702,48 +886,7 @@ button.sucesso-btn:hover,
   }
 }
 
-.grid-acoes-detalhe {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
 
-.btn-detalhe-acao {
-  width: auto !important;
-  margin: 0 !important;
-  padding: 8px 12px !important;
-  font-size: 12px !important;
-  font-weight: 600 !important;
-  border-radius: 8px !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  gap: 6px !important;
-  min-height: 38px !important;
-  transition: all 0.15s ease !important;
-  white-space: nowrap !important;
-}
-
-.btn-primario-acao {
-  background: #0f172a !important;
-  color: #ffffff !important;
-  border: 1px solid #0f172a !important;
-}
-
-.btn-primario-acao:hover {
-  background: #1e293b !important;
-}
-
-.btn-whatsapp-acao {
-  background: #f0fdf4 !important;
-  color: #166534 !important;
-  border: 1px solid #bbf7d0 !important;
-}
-
-.btn-whatsapp-acao:hover {
-  background: #dcfce7 !important;
-  border-color: #86efac !important;
-}
 
 /* Ações em linha */
 .acoes-linha {
@@ -1259,59 +1402,107 @@ button.sucesso-btn:hover,
 }
 
 .grid-acoes-detalhe {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 8px;
   margin-top: 10px;
+  margin-bottom: 12px;
+}
+
+.grupo-acoes-icone {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .btn-detalhe-acao {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  height: 38px;
-  padding: 0 10px;
-  font-size: 13px;
-  font-weight: 600;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  width: 100%;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  height: 34px !important;
+  min-height: 34px !important;
+  padding: 0 6px !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  border-radius: 8px !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
   margin: 0 !important;
-  margin-top: 0 !important;
-  white-space: nowrap;
-  box-sizing: border-box;
+  white-space: nowrap !important;
+  box-sizing: border-box !important;
+  background: var(--cor-card) !important;
+  color: var(--cor-texto) !important;
+  border: 1px solid var(--cor-borda) !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.btn-detalhe-texto {
+  padding: 0 12px !important;
+  width: auto !important;
+}
+
+.btn-detalhe-icone {
+  width: 32px !important;
+  min-width: 32px !important;
+  padding: 0 !important;
+}
+
+.btn-detalhe-acao:hover {
+  background: var(--cor-fundo) !important;
+  border-color: var(--cor-borda-hover, var(--cor-borda)) !important;
 }
 
 .btn-detalhe-acao:active {
-  transform: scale(0.98);
+  transform: scale(0.97);
 }
 
 .btn-detalhe-acao svg {
   flex-shrink: 0;
+  transition: transform 0.15s ease;
 }
 
-.btn-primario-acao {
-  background: var(--cor-primaria);
-  color: #ffffff;
-  border: 1px solid var(--cor-primaria);
+/* Cores distintas nos ícones dos botões de ação */
+.btn-primario-acao svg {
+  color: #2563eb;
 }
 
-.btn-primario-acao:hover {
-  background: var(--cor-primaria-hover);
-  border-color: var(--cor-primaria-hover);
+.btn-whatsapp-acao svg {
+  color: #16a34a;
 }
 
-.btn-whatsapp-acao {
-  background: #f0fdf4;
-  color: #166534;
-  border: 1px solid #bbf7d0;
+.btn-relatorio-acao svg {
+  color: #64748b;
 }
 
-.btn-whatsapp-acao:hover {
-  background: #dcfce7;
-  border-color: #86efac;
+[data-tema="dark"] .btn-primario-acao svg {
+  color: #38bdf8;
+}
+
+[data-tema="dark"] .btn-whatsapp-acao svg {
+  color: #22c55e;
+}
+
+[data-tema="dark"] .btn-relatorio-acao svg {
+  color: #94a3b8;
+}
+
+@media (max-width: 380px) {
+  .grid-acoes-detalhe {
+    gap: 5px;
+  }
+  .btn-detalhe-acao {
+    font-size: 11px !important;
+    padding: 0 2px !important;
+    gap: 4px !important;
+  }
+  .btn-detalhe-acao svg {
+    width: 13px;
+    height: 13px;
+  }
 }
 
 /* Linha sutil para conta não gerada no mês */
@@ -1577,15 +1768,8 @@ button.sucesso-btn:hover,
 /* Badges de Vencimento                                         */
 /* ============================================================ */
 .badge.vence-hoje {
-  background: #ffedd5;
-  color: #c2410c;
-  border: 1px solid #fed7aa;
-}
-
-.badge.vencida {
-  background: #fee2e2;
-  color: #b91c1c;
-  border: 1px solid #fecaca;
+  background: var(--cor-aviso-fundo);
+  color: var(--cor-aviso-texto);
 }
 
 /* ============================================================ */
@@ -2051,6 +2235,25 @@ button.sucesso-btn:hover,
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
   line-height: 1;
   margin: 0;
+}
+
+.avatar-morador {
+  border-radius: 50%;
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  flex-shrink: 0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  line-height: 1;
+}
+
+.linha-com-avatar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .nome-topo {
@@ -2591,6 +2794,8 @@ button.sucesso-btn:hover,
   padding: 2px 7px;
   border-radius: 999px;
   margin-top: 4px;
+  white-space: nowrap;
+  cursor: default;
 }
 
 .badge-comparativo-mes.menor {
@@ -2672,3 +2877,52 @@ button.sucesso-btn:hover,
   }
 }
 
+
+/* Gráfico de Evolução (últimos 6 meses) - barras simples sem lib externa */
+#card-grafico-evolucao {
+  padding: 16px 18px;
+}
+
+.grafico-evolucao-barras {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 100px;
+  padding-top: 6px;
+}
+
+.grafico-evolucao-coluna {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  height: 100%;
+  gap: 6px;
+}
+
+.grafico-evolucao-valor {
+  font-size: 10px;
+  color: var(--cor-texto-suave);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.grafico-evolucao-barra {
+  width: 100%;
+  max-width: 34px;
+  background: var(--cor-destaque);
+  border-radius: 6px 6px 2px 2px;
+  min-height: 3px;
+  transition: height 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.grafico-evolucao-barra.mes-atual {
+  background: var(--cor-primaria);
+}
+
+.grafico-evolucao-mes {
+  font-size: 10.5px;
+  color: var(--cor-texto-suave);
+  text-transform: capitalize;
+}
