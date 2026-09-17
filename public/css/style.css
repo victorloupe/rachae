@@ -389,6 +389,19 @@ button.sucesso-btn:hover,
   justify-content: space-around;
   padding: 6px 0 calc(6px + env(safe-area-inset-bottom, 0px));
   z-index: 100;
+  transition: background-color 0.25s ease, border-color 0.25s ease;
+}
+
+[data-tema="dark"] .rodape-nav {
+  background: rgba(19, 27, 46, 0.94);
+  border-top-color: var(--cor-borda);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-tema="light"]) .rodape-nav {
+    background: rgba(19, 27, 46, 0.94);
+    border-top-color: var(--cor-borda);
+  }
 }
 
 .rodape-nav a {
@@ -531,8 +544,9 @@ button.sucesso-btn:hover,
 
 .numero-casa-tag {
   display: inline-block;
-  background: #f1f5f9;
-  color: #475569;
+  background: var(--cor-fundo);
+  color: var(--cor-texto-suave);
+  border: 1px solid var(--cor-borda);
   padding: 2px 8px;
   border-radius: 4px;
   font-size: 12px;
@@ -749,7 +763,7 @@ button.sucesso-btn:hover,
   margin: 0;
   border-radius: 8px;
   border: 1px solid var(--cor-borda);
-  background: #ffffff;
+  background: var(--cor-card);
   color: var(--cor-texto);
   cursor: pointer;
   transition: all 0.15s ease;
@@ -757,9 +771,9 @@ button.sucesso-btn:hover,
 }
 
 .btn-icone:hover {
-  background: #f8fafc;
-  border-color: #cbd5e1;
-  color: #0f172a;
+  background: var(--cor-fundo);
+  border-color: var(--cor-borda-foco);
+  color: var(--cor-texto);
   transform: translateY(-1px);
 }
 
@@ -815,6 +829,44 @@ button.sucesso-btn:hover,
   background: #dcfce7;
   border-color: #86efac;
   color: #15803d;
+}
+
+[data-tema="dark"] .btn-icone-pix-pago {
+  background: rgba(16, 185, 129, 0.15) !important;
+  border-color: rgba(16, 185, 129, 0.3) !important;
+  color: #34d399 !important;
+}
+
+[data-tema="dark"] .btn-icone-pix-pendente {
+  background: rgba(239, 68, 68, 0.15) !important;
+  border-color: rgba(239, 68, 68, 0.3) !important;
+  color: #f87171 !important;
+}
+
+[data-tema="dark"] .btn-icone-whatsapp {
+  background: rgba(34, 197, 94, 0.15) !important;
+  border-color: rgba(34, 197, 94, 0.3) !important;
+  color: #4ade80 !important;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-tema="light"]) .btn-icone-pix-pago {
+    background: rgba(16, 185, 129, 0.15) !important;
+    border-color: rgba(16, 185, 129, 0.3) !important;
+    color: #34d399 !important;
+  }
+
+  :root:not([data-tema="light"]) .btn-icone-pix-pendente {
+    background: rgba(239, 68, 68, 0.15) !important;
+    border-color: rgba(239, 68, 68, 0.3) !important;
+    color: #f87171 !important;
+  }
+
+  :root:not([data-tema="light"]) .btn-icone-whatsapp {
+    background: rgba(34, 197, 94, 0.15) !important;
+    border-color: rgba(34, 197, 94, 0.3) !important;
+    color: #4ade80 !important;
+  }
 }
 
 .btn-icone-perigo {
@@ -1445,7 +1497,7 @@ button.sucesso-btn:hover,
   grid-template-columns: repeat(3, 1fr) !important;
   gap: 4px !important;
   margin: 14px 0 16px !important;
-  background: #f1f5f9 !important;
+  background: var(--cor-fundo) !important;
   padding: 4px !important;
   border-radius: 10px !important;
   border: 1px solid var(--cor-borda) !important;
@@ -1476,22 +1528,22 @@ button.sucesso-btn:hover,
 
 .btn-filtro:hover {
   color: var(--cor-texto) !important;
-  background: rgba(255, 255, 255, 0.5) !important;
+  background: var(--cor-card) !important;
 }
 
 .btn-filtro.ativo {
   background: var(--cor-card) !important;
   color: var(--cor-texto) !important;
   font-weight: 700 !important;
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.08), 0 1px 2px -1px rgba(0, 0, 0, 0.04) !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.12), 0 1px 2px -1px rgba(0, 0, 0, 0.06) !important;
 }
 
 .badge-contagem {
   font-size: 11px;
   padding: 1px 7px;
   border-radius: 9999px;
-  background: #e2e8f0;
-  color: #475569;
+  background: var(--cor-borda);
+  color: var(--cor-texto-suave);
   font-weight: 600;
   line-height: 1.2;
 }
@@ -1502,23 +1554,23 @@ button.sucesso-btn:hover,
 }
 
 .badge-contagem.pendente {
-  background: #fef3c7;
-  color: #92400e;
+  background: var(--cor-aviso-fundo);
+  color: var(--cor-aviso-texto);
 }
 
 .btn-filtro.ativo .badge-contagem.pendente {
-  background: #fef3c7;
-  color: #92400e;
+  background: var(--cor-aviso-fundo);
+  color: var(--cor-aviso-texto);
 }
 
 .badge-contagem.pago {
-  background: #d1fae5;
-  color: #065f46;
+  background: var(--cor-sucesso-fundo);
+  color: var(--cor-sucesso-texto);
 }
 
 .btn-filtro.ativo .badge-contagem.pago {
-  background: #d1fae5;
-  color: #065f46;
+  background: var(--cor-sucesso-fundo);
+  color: var(--cor-sucesso-texto);
 }
 
 /* ============================================================ */
@@ -1573,7 +1625,7 @@ button.sucesso-btn:hover,
 }
 
 .skeleton-shimmer {
-  background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+  background: linear-gradient(90deg, var(--cor-fundo) 25%, var(--cor-borda) 50%, var(--cor-fundo) 75%);
   background-size: 200% 100%;
   animation: shimmerAnim 1.6s infinite ease-in-out;
   border-radius: 6px;
@@ -1591,7 +1643,7 @@ button.sucesso-btn:hover,
   justify-content: space-between;
   align-items: center;
   padding: 14px 0;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid var(--cor-borda);
 }
 
 .skeleton-item-esq {
@@ -1955,7 +2007,7 @@ button.sucesso-btn:hover,
   align-items: center !important;
   justify-content: center !important;
   gap: 8px !important;
-  background: #f8fafc;
+  background: var(--cor-card);
   border: 1px solid var(--cor-borda);
   border-radius: 9999px;
   padding: 3px 10px 3px 4px !important;
@@ -1973,9 +2025,9 @@ button.sucesso-btn:hover,
 }
 
 .btn-usuario-topo:hover {
-  background: #f1f5f9;
-  border-color: #cbd5e1;
-  box-shadow: 0 2px 6px -1px rgba(15, 23, 42, 0.08);
+  background: var(--cor-fundo);
+  border-color: var(--cor-borda-foco);
+  box-shadow: 0 2px 6px -1px rgba(0, 0, 0, 0.15);
   transform: translateY(-1px);
 }
 
@@ -1987,7 +2039,7 @@ button.sucesso-btn:hover,
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #0f172a 0%, #334155 100%);
+  background: linear-gradient(135deg, var(--cor-destaque) 0%, var(--cor-destaque-hover) 100%);
   color: #ffffff;
   display: inline-flex;
   align-items: center;
@@ -1996,7 +2048,7 @@ button.sucesso-btn:hover,
   font-weight: 700;
   letter-spacing: -0.02em;
   flex-shrink: 0;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.2);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
   line-height: 1;
   margin: 0;
 }
@@ -2079,7 +2131,7 @@ button.sucesso-btn:hover,
 }
 
 .btn-fechar-modal-x:hover {
-  background: #f1f5f9;
+  background: var(--cor-fundo);
   color: var(--cor-texto);
 }
 
@@ -2089,7 +2141,7 @@ button.sucesso-btn:hover,
   align-items: center;
   gap: 16px;
   padding: 14px 16px;
-  background: #f8fafc;
+  background: var(--cor-fundo);
   border: 1px solid var(--cor-borda);
   border-radius: 14px;
   margin-bottom: 20px;
@@ -2099,7 +2151,7 @@ button.sucesso-btn:hover,
   width: 54px;
   height: 54px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  background: linear-gradient(135deg, var(--cor-destaque) 0%, var(--cor-destaque-hover) 100%);
   color: #ffffff;
   display: flex;
   align-items: center;
@@ -2109,7 +2161,7 @@ button.sucesso-btn:hover,
   letter-spacing: -0.02em;
   flex-shrink: 0;
   box-shadow: 0 4px 12px rgba(15, 23, 42, 0.18);
-  border: 2px solid #ffffff;
+  border: 2px solid var(--cor-borda);
 }
 
 .perfil-avatar-info {
@@ -2164,7 +2216,7 @@ button.sucesso-btn:hover,
   font-weight: 600;
   padding: 2px 7px;
   border-radius: 999px;
-  background: #f1f5f9;
+  background: var(--cor-fundo);
   color: var(--cor-texto-suave);
   border: 1px solid var(--cor-borda);
   text-transform: uppercase;
@@ -2202,10 +2254,10 @@ button.sucesso-btn:hover,
 }
 
 .input-com-icone.input-bloqueado input {
-  background: #f1f5f9 !important;
+  background: var(--cor-fundo) !important;
   color: var(--cor-texto-suave) !important;
   cursor: not-allowed;
-  border-color: #e2e8f0 !important;
+  border-color: var(--cor-borda) !important;
 }
 
 /* Seção expansível de senha */
@@ -2213,7 +2265,7 @@ button.sucesso-btn:hover,
   border: 1px solid var(--cor-borda);
   border-radius: 12px;
   padding: 12px 14px;
-  background: #ffffff;
+  background: var(--cor-card);
   margin-bottom: 16px;
 }
 

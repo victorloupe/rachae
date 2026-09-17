@@ -742,7 +742,7 @@ function renderizarCiclosNaTela(animar = false) {
       : "";
 
     html += `
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px; margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px solid #f1f5f9;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px; margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px solid var(--cor-borda);">
         <h3 style="margin: 0; font-size: 15px; display: flex; align-items: center; flex-wrap: wrap; gap: 4px;">
           <span>${conta.nome} — ${formatarMoeda(ciclo.valor_total)}</span>
           ${badgeIndividual}
@@ -1348,7 +1348,7 @@ async function abrirModalPix(cobrancaId) {
 
   if (payloadPix) {
     htmlPix += `
-      <div style="background:#f8fafc; border:1px solid var(--cor-borda); border-radius:8px; padding:10px; margin-bottom:10px; text-align:left;">
+      <div style="background:var(--cor-fundo); border:1px solid var(--cor-borda); border-radius:8px; padding:10px; margin-bottom:10px; text-align:left;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
           <span style="font-size:11px; font-weight:700; color:var(--cor-texto-suave); text-transform:uppercase;">Pix Copia e Cola Oficial</span>
           <span style="font-size:11px; color:var(--cor-destaque); font-weight:600;">Com valor exato</span>
@@ -1365,7 +1365,7 @@ async function abrirModalPix(cobrancaId) {
     `;
   } else if (chaveDestino) {
     htmlPix += `
-      <div style="background:#f8fafc; border:1px solid var(--cor-borda); border-radius:8px; padding:10px; margin-bottom:10px; text-align:left;">
+      <div style="background:var(--cor-fundo); border:1px solid var(--cor-borda); border-radius:8px; padding:10px; margin-bottom:10px; text-align:left;">
         <span style="font-size:11px; font-weight:700; color:var(--cor-texto-suave); text-transform:uppercase; display:block;">Chave Pix (${nomeBeneficiario})</span>
         <div style="font-size:15px; font-weight:700; color:var(--cor-texto); margin:4px 0 6px;">${chaveDestino}</div>
         <button type="button" class="secundario pequeno" style="width:100%; margin:0 !important;" onclick="copiarPix('${chaveDestino}')">
