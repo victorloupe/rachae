@@ -3,11 +3,12 @@
   "cleanUrls": false,
   "trailingSlash": false,
   "rewrites": [
-    { "source": "/dashboard", "destination": "/public/dashboard.html" },
-    { "source": "/contas", "destination": "/public/contas.html" },
-    { "source": "/convidar", "destination": "/public/convidar.html" },
-    { "source": "/casa", "destination": "/public/casa.html" },
-    { "source": "/cadastro", "destination": "/public/cadastro.html" },
+    { "source": "/dashboard", "destination": "/dashboard.html" },
+    { "source": "/contas", "destination": "/contas.html" },
+    { "source": "/convidar", "destination": "/convidar.html" },
+    { "source": "/casa", "destination": "/casa.html" },
+    { "source": "/cadastro", "destination": "/cadastro.html" },
+    { "source": "/login", "destination": "/index.html" },
     { "source": "/(.*)", "destination": "/public/$1" }
   ]
 }
