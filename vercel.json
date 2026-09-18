@@ -1,8 +1,13 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "cleanUrls": true,
+  "cleanUrls": false,
   "trailingSlash": false,
   "rewrites": [
+    { "source": "/dashboard", "destination": "/public/dashboard.html" },
+    { "source": "/contas", "destination": "/public/contas.html" },
+    { "source": "/convidar", "destination": "/public/convidar.html" },
+    { "source": "/casa", "destination": "/public/casa.html" },
+    { "source": "/cadastro", "destination": "/public/cadastro.html" },
     { "source": "/(.*)", "destination": "/public/$1" }
   ]
 }
