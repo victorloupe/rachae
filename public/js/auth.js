@@ -260,14 +260,22 @@ if (formCadastro) {
 
 async function redirecionarAposAutenticacao(usuarioId, msgEl) {
   try {
+    const dispararAnimacao = (nomeCasa, destino) => {
+      if (window.Animacoes && typeof window.Animacoes.animarEntrandoCasa === "function") {
+        window.Animacoes.animarEntrandoCasa({ nomeCasa, destino });
+      } else {
+        window.location.href = destino;
+      }
+    };
+
     // 1. Se veio de um link de convite, adiciona diretamente à casa
     const casaNome = await processarConviteAposAutenticacao(usuarioId);
     if (casaNome) {
       if (msgEl) {
         msgEl.className = "sucesso";
-        msgEl.textContent = `Você entrou em "${casaNome}"! Redirecionando...`;
+        msgEl.textContent = `Você entrou em "${casaNome}"!`;
       }
-      setTimeout(() => (window.location.href = "dashboard.html"), 600);
+      dispararAnimacao(casaNome, "dashboard.html");
       return;
     }
 
@@ -292,7 +300,7 @@ async function redirecionarAposAutenticacao(usuarioId, msgEl) {
       })
       .filter((item) => item.casa && item.casa.id);
 
-    // SE TIVER EXATAMENTE 1 CASA: entra direto nela!
+    // SE TIVER EXATAMENTE 1 CASA: entra direto nela com a animação "Entrando na casa"!
     if (casasValidas.length === 1) {
       const unica = casasValidas[0];
       localStorage.setItem("casa_atual", unica.casa.id);
@@ -304,12 +312,12 @@ async function redirecionarAposAutenticacao(usuarioId, msgEl) {
         msgEl.className = "sucesso";
         msgEl.textContent = `Entrando em "${unica.casa.nome}"...`;
       }
-      setTimeout(() => (window.location.href = "dashboard.html"), 400);
+      dispararAnimacao(unica.casa.nome, "dashboard.html");
       return;
     }
 
-    // SE TIVER 0 CASAS OU MAIS DE 1: vai para casa.html
-    window.location.href = "casa.html";
+    // SE TIVER 0 CASAS OU MAIS DE 1: vai para casa.html com a animação
+    dispararAnimacao("", "casa.html");
   } catch (e) {
     console.warn("Erro ao redirecionar após autenticação:", e);
     window.location.href = "casa.html";
@@ -331,4 +339,172 @@ function traduzErro(erro) {
     "Password should be at least 6 characters": "A senha precisa ter pelo menos 6 caracteres.",
   };
   return mapa[msg] || (typeof erro === "object" ? erro.message : erro) || "Erro ao processar solicitação.";
+}
+
+// ============================================================
+// Fluxo de Recuperação e Redefinição de Senha
+// ============================================================
+function abrirModalRecuperarSenha() {
+  const modal = document.getElementById("modal-recuperar-senha");
+  if (!modal) return;
+  const emailLogin = document.getElementById("email");
+  const emailRecup = document.getElementById("email-recuperacao");
+  if (emailLogin && emailRecup && emailLogin.value) {
+    emailRecup.value = emailLogin.value.trim();
+  }
+  const msg = document.getElementById("msg-recuperar-senha");
+  if (msg) {
+    msg.style.display = "none";
+    msg.textContent = "";
+  }
+  modal.style.display = "flex";
+}
+window.abrirModalRecuperarSenha = abrirModalRecuperarSenha;
+
+function fecharModalRecuperarSenha() {
+  const modal = document.getElementById("modal-recuperar-senha");
+  if (modal) modal.style.display = "none";
+}
+window.fecharModalRecuperarSenha = fecharModalRecuperarSenha;
+
+async function enviarEmailRecuperacao(event) {
+  if (event) event.preventDefault();
+  const inputEmail = document.getElementById("email-recuperacao");
+  const btn = document.getElementById("btn-enviar-recuperacao");
+  const msg = document.getElementById("msg-recuperar-senha");
+  if (!inputEmail || !inputEmail.value) return;
+
+  const email = inputEmail.value.trim();
+  if (btn) btn.disabled = true;
+  if (msg) {
+    msg.className = "";
+    msg.textContent = "Enviando e-mail...";
+    msg.style.display = "block";
+  }
+
+  try {
+    const redirectUrl = `${window.location.origin}${window.location.pathname}?redefinir=true`;
+    const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+      redirectTo: redirectUrl,
+    });
+
+    if (error) throw error;
+
+    if (msg) {
+      msg.className = "sucesso";
+      msg.textContent = "E-mail enviado! Verifique sua caixa de entrada para redefinir sua senha.";
+      msg.style.display = "block";
+    }
+    if (typeof mostrarToast === "function") {
+      mostrarToast("Link de recuperação enviado com sucesso!");
+    }
+  } catch (err) {
+    if (msg) {
+      msg.className = "erro";
+      msg.textContent = traduzErro(err.message || err);
+      msg.style.display = "block";
+    }
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+window.enviarEmailRecuperacao = enviarEmailRecuperacao;
+
+async function salvarNovaSenha(event) {
+  if (event) event.preventDefault();
+  const inputNova = document.getElementById("nova-senha");
+  const inputConfirma = document.getElementById("confirma-nova-senha");
+  const btn = document.getElementById("btn-submit-redefinir");
+  const msg = document.getElementById("msg-redefinir-senha");
+
+  const nova = inputNova ? inputNova.value : "";
+  const confirma = inputConfirma ? inputConfirma.value : "";
+
+  if (!nova || nova.length < 6) {
+    if (msg) {
+      msg.className = "erro";
+      msg.textContent = "A nova senha deve ter pelo menos 6 caracteres.";
+    }
+    return;
+  }
+
+  if (nova !== confirma) {
+    if (msg) {
+      msg.className = "erro";
+      msg.textContent = "As senhas informadas não conferem.";
+    }
+    return;
+  }
+
+  if (btn) btn.disabled = true;
+  if (msg) {
+    msg.className = "";
+    msg.textContent = "Salvando nova senha...";
+  }
+
+  try {
+    const { error } = await supabaseClient.auth.updateUser({ password: nova });
+    if (error) throw error;
+
+    if (msg) {
+      msg.className = "sucesso";
+      msg.textContent = "Senha alterada com sucesso! Entrando...";
+    }
+    if (typeof mostrarToast === "function") {
+      mostrarToast("Senha alterada com sucesso!");
+    }
+
+    const { data: { user } } = await supabaseClient.auth.getUser();
+    if (user) {
+      await redirecionarAposAutenticacao(user.id, msg);
+    } else {
+      setTimeout(() => { window.location.href = "index.html"; }, 1200);
+    }
+  } catch (err) {
+    if (msg) {
+      msg.className = "erro";
+      msg.textContent = traduzErro(err.message || err);
+    }
+    if (btn) btn.disabled = false;
+  }
+}
+window.salvarNovaSenha = salvarNovaSenha;
+
+// Detecta se o usuário entrou pelo link de redefinição de senha
+function verificarFluxoRedefinicaoSenha() {
+  const hash = window.location.hash || "";
+  const search = window.location.search || "";
+  const ehRecuperacao =
+    hash.includes("type=recovery") ||
+    search.includes("redefinir=true") ||
+    search.includes("type=recovery");
+
+  if (ehRecuperacao) {
+    const cardLogin = document.querySelector(".card-auth:not(#card-redefinir-senha)");
+    const cardRedefinir = document.getElementById("card-redefinir-senha");
+    if (cardLogin && cardRedefinir) {
+      cardLogin.style.display = "none";
+      cardRedefinir.style.display = "block";
+    }
+  }
+
+  // Escuta evento do Supabase Auth caso o token seja processado via hash
+  if (window.supabaseClient && window.supabaseClient.auth) {
+    window.supabaseClient.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY") {
+        const cardLogin = document.querySelector(".card-auth:not(#card-redefinir-senha)");
+        const cardRedefinir = document.getElementById("card-redefinir-senha");
+        if (cardLogin && cardRedefinir) {
+          cardLogin.style.display = "none";
+          cardRedefinir.style.display = "block";
+        }
+      }
+    });
+  }
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", verificarFluxoRedefinicaoSenha);
+} else {
+  verificarFluxoRedefinicaoSenha();
 }

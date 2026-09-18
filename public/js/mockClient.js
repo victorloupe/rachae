@@ -46,9 +46,9 @@
         },
       ],
       profiles: [
-        { id: userId1, nome: "Vitor (Demo)", telefone: "(11) 98888-1111", criado_em: new Date().toISOString() },
-        { id: userId2, nome: "Lucas Silva", telefone: "(11) 98888-2222", criado_em: new Date().toISOString() },
-        { id: userId3, nome: "Mariana Rios", telefone: "(11) 98888-3333", criado_em: new Date().toISOString() },
+        { id: userId1, nome: "Vitor (Demo)", telefone: "(11) 98888-1111", chave_pix: "11988881111", tipo_chave_pix: "telefone", nome_titular_pix: "Vitor Demo", banco_pix: "Nubank", criado_em: new Date().toISOString() },
+        { id: userId2, nome: "Lucas Silva", telefone: "(11) 98888-2222", chave_pix: "lucas.silva@email.com", tipo_chave_pix: "email", nome_titular_pix: "Lucas Silva", banco_pix: "Inter", criado_em: new Date().toISOString() },
+        { id: userId3, nome: "Mariana Rios", telefone: "(11) 98888-3333", chave_pix: "12345678901", tipo_chave_pix: "cpf", nome_titular_pix: "Mariana Rios", banco_pix: "Itaú", criado_em: new Date().toISOString() },
       ],
       casas: [
         {

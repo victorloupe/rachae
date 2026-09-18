@@ -10,7 +10,8 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="apple-touch-icon" href="assets/icon.jpg" />
   <link rel="manifest" href="manifest.json" />
-  <link rel="stylesheet" href="css/style.css?v=20" />
+  <script>(function(){try{const t=localStorage.getItem("rachae_tema")||(window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light");document.documentElement.setAttribute("data-tema",t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="css/style.css?v=39" />
 </head>
 <body>
   <header class="topo">
@@ -88,7 +89,7 @@
         <input type="email" id="morador-novo-email" placeholder="email@exemplo.com" required />
 
         <label for="morador-novo-telefone">Telefone</label>
-        <input type="tel" id="morador-novo-telefone" placeholder="(00) 00000-0000" />
+        <input type="tel" id="morador-novo-telefone" placeholder="(00) 00000-0000" inputmode="tel" />
 
         <label for="morador-novo-senha">Senha</label>
         <input type="password" id="morador-novo-senha" placeholder="Mínimo de 6 caracteres" minlength="6" required />
@@ -148,7 +149,24 @@
         <input type="text" id="edit-morador-nome" required placeholder="Nome do morador" style="margin-bottom:12px;">
 
         <label for="edit-morador-telefone" style="display:block; margin-bottom:4px; font-weight:600;">TELEFONE (WHATSAPP)</label>
-        <input type="tel" id="edit-morador-telefone" placeholder="(00) 00000-0000" style="margin-bottom:12px;">
+        <input type="tel" id="edit-morador-telefone" placeholder="(00) 00000-0000" style="margin-bottom:12px;" inputmode="tel">
+
+        <div style="display: grid; grid-template-columns: 1fr 1.2fr; gap: 8px; margin-bottom: 12px;">
+          <div>
+            <label for="edit-morador-pix-tipo" style="display:block; margin-bottom:4px; font-weight:600; font-size: 12px;">TIPO PIX</label>
+            <select id="edit-morador-pix-tipo" class="input-select" style="margin: 0; padding: 7px 8px;">
+              <option value="telefone">Celular</option>
+              <option value="cpf">CPF</option>
+              <option value="cnpj">CNPJ</option>
+              <option value="email">E-mail</option>
+              <option value="aleatoria">Aleatória</option>
+            </select>
+          </div>
+          <div>
+            <label for="edit-morador-pix-chave" style="display:block; margin-bottom:4px; font-weight:600; font-size: 12px;">CHAVE PIX PESSOAL</label>
+            <input type="text" id="edit-morador-pix-chave" placeholder="Chave para reembolsos" style="margin: 0;">
+          </div>
+        </div>
 
         <div id="campo-edit-morador-papel" style="margin-bottom:16px;">
           <label for="edit-morador-papel" style="display:block; margin-bottom:4px; font-weight:600;">PAPEL NA CASA</label>
@@ -198,14 +216,14 @@
 
   <!-- GSAP & Animações -->
   <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
-  <script src="js/animacoes.js?v=14"></script>
+  <script src="js/animacoes.js?v=39"></script>
 
   <!-- Supabase JS CDN (v2) -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="js/config.js?v=14"></script>
-  <script src="js/mockClient.js?v=14"></script>
-  <script src="js/supabaseClient.js?v=14"></script>
-  <script src="js/instantNav.js?v=20"></script>
-  <script src="js/convidar.js?v=20"></script>
+  <script src="js/config.js?v=39"></script>
+  <script src="js/mockClient.js?v=39"></script>
+  <script src="js/supabaseClient.js?v=39"></script>
+  <script src="js/instantNav.js?v=39"></script>
+  <script src="js/convidar.js?v=39"></script>
 </body>
 </html>

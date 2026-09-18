@@ -10,7 +10,8 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="apple-touch-icon" href="assets/icon.jpg" />
   <link rel="manifest" href="manifest.json" />
-  <link rel="stylesheet" href="css/style.css?v=20" />
+  <script>(function(){try{const t=localStorage.getItem("rachae_tema")||(window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light");document.documentElement.setAttribute("data-tema",t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="css/style.css?v=39" />
 </head>
 <body>
   <header class="topo">
@@ -121,6 +122,31 @@
       </div>
     </div>
 
+    <!-- Card Chave Pix Pessoal do Morador -->
+    <div class="card" id="card-pix-pessoal">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+        <h2 style="margin: 0;">Sua Chave Pix Pessoal</h2>
+        <span class="badge" style="background: rgba(16, 185, 129, 0.12); color: var(--cor-sucesso); font-weight: 600;">Reembolsos</span>
+      </div>
+      <p class="texto-suave" style="margin: 0 0 12px; font-size: 13px;">
+        Esta é a sua chave pessoal para os colegas de casa reembolsarem compras extras e rateios avulsos (mercado, produtos de limpeza, reposições).
+      </p>
+      <div id="box-status-pix-pessoal" class="box-pix-oficial" style="margin-bottom: 12px;">
+        <span class="box-pix-label">Sua Chave Pix Cadastrada</span>
+        <div id="txt-pix-pessoal-titular" class="box-pix-titular" style="display: none;"></div>
+        <div id="txt-pix-pessoal-banco" class="box-pix-banco" style="display: none;"></div>
+        <div style="display: flex; align-items: center; gap: 8px; margin-top: 6px;">
+          <div id="txt-pix-pessoal" class="box-pix-chave">Nenhuma chave cadastrada ainda</div>
+        </div>
+      </div>
+      <button type="button" class="secundario" onclick="abrirModalPerfil()" style="width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 6px;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
+        </svg>
+        <span>Editar Minha Chave Pix (no Meu Perfil)</span>
+      </button>
+    </div>
+
     <div id="aviso-permissao-contas" style="display:none;" class="aviso-permissao">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="12" cy="12" r="10"/>
@@ -151,7 +177,7 @@
           </select>
 
           <label for="valor">Valor (R$)</label>
-          <input type="number" id="valor" step="0.01" min="0" required placeholder="0.00" />
+          <input type="number" id="valor" step="0.01" min="0" required placeholder="0.00" inputmode="decimal" />
         </div>
 
         <div class="secao-form">
@@ -163,7 +189,7 @@
           </select>
 
           <label for="dia-vencimento">Dia do vencimento</label>
-          <input type="number" id="dia-vencimento" min="1" max="28" required placeholder="Ex: 10" />
+          <input type="number" id="dia-vencimento" min="1" max="28" required placeholder="Ex: 10" inputmode="numeric" />
 
           <label for="quando-iniciar">Quando começa a cobrança?</label>
           <select id="quando-iniciar">
@@ -185,7 +211,7 @@
           </label>
           <div id="bloco-parcelas" style="display:none; margin-top:8px;">
             <label for="parcelas-total">Quantas parcelas?</label>
-            <input type="number" id="parcelas-total" min="2" max="120" placeholder="Ex: 10" />
+            <input type="number" id="parcelas-total" min="2" max="120" placeholder="Ex: 10" inputmode="numeric" />
             <p class="texto-suave" style="font-size:11px; margin:4px 0 0;">O mês escolhido acima ("Quando começa a cobrança?") vira a parcela 1. Depois da última parcela a cobrança para sozinha.</p>
           </div>
         </div>
@@ -259,7 +285,7 @@
           </select>
 
           <label for="edit-valor">Valor (R$)</label>
-          <input type="number" id="edit-valor" step="0.01" min="0" required />
+          <input type="number" id="edit-valor" step="0.01" min="0" required inputmode="decimal" />
         </div>
 
         <div class="secao-form">
@@ -271,7 +297,7 @@
           </select>
 
           <label for="edit-dia-vencimento">Dia do vencimento</label>
-          <input type="number" id="edit-dia-vencimento" min="1" max="28" required />
+          <input type="number" id="edit-dia-vencimento" min="1" max="28" required inputmode="numeric" />
 
           <label for="edit-quando-iniciar">Quando começa a cobrança?</label>
           <select id="edit-quando-iniciar">
@@ -293,7 +319,7 @@
           </label>
           <div id="edit-bloco-parcelas" style="display:none; margin-top:8px;">
             <label for="edit-parcelas-total">Quantas parcelas?</label>
-            <input type="number" id="edit-parcelas-total" min="2" max="120" placeholder="Ex: 10" />
+            <input type="number" id="edit-parcelas-total" min="2" max="120" placeholder="Ex: 10" inputmode="numeric" />
           </div>
         </div>
 
@@ -378,14 +404,14 @@
 
   <!-- GSAP & Animações -->
   <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
-  <script src="js/animacoes.js?v=14"></script>
+  <script src="js/animacoes.js?v=39"></script>
 
   <!-- Supabase JS CDN (v2) -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="js/config.js?v=14"></script>
-  <script src="js/mockClient.js?v=14"></script>
-  <script src="js/supabaseClient.js?v=14"></script>
-  <script src="js/instantNav.js?v=20"></script>
-  <script src="js/contas.js?v=14"></script>
+  <script src="js/config.js?v=39"></script>
+  <script src="js/mockClient.js?v=39"></script>
+  <script src="js/supabaseClient.js?v=39"></script>
+  <script src="js/instantNav.js?v=39"></script>
+  <script src="js/contas.js?v=39"></script>
 </body>
 </html>

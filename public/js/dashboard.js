@@ -12,6 +12,8 @@ dataSelecionada.setDate(1); // Garante dia 1 do mês
 let filtroAtual = "todos";
 let filtroMoradorAtual = "todos";
 let dadosCiclosCarregados = [];
+let dadosMoradoresCasa = [];
+let dadosDespesasExtrasCarregadas = [];
 
 const MESES = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -37,6 +39,7 @@ async function inicializarDashboard() {
   papelUsuarioAtual = await obterPapelUsuarioNaCasa(casaId, usuarioAtualId);
 
   await carregarInfoCasaTopo();
+  configurarRealtimeDashboard();
   configurarNavegacaoMes();
   configurarFiltrosCobrancas();
   configurarAcoesDashboard();
@@ -99,6 +102,82 @@ async function carregarInfoCasaTopo() {
     }
   } catch (e) {
     console.warn("Erro ao buscar dados da casa no dashboard:", e);
+  }
+}
+
+let realtimeChannelDashboard = null;
+
+function configurarRealtimeDashboard() {
+  if (!casaId || !window.supabaseClient || typeof window.supabaseClient.channel !== "function") return;
+
+  if (realtimeChannelDashboard) {
+    try {
+      window.supabaseClient.removeChannel(realtimeChannelDashboard);
+    } catch (e) {}
+    realtimeChannelDashboard = null;
+  }
+
+  try {
+    realtimeChannelDashboard = window.supabaseClient
+      .channel(`realtime_dash_${casaId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "cobrancas_individuais",
+        },
+        (payload) => {
+          limparCacheDashboard();
+          carregarCiclosDoMes();
+
+          if (payload.eventType === "UPDATE") {
+            const novo = payload.new;
+            if (novo.status === "pago") {
+              mostrarToast("Uma cobrança foi confirmada como paga!", "sucesso");
+            } else if (novo.status === "em_analise") {
+              mostrarToast("Novo comprovante enviado para análise!", "alerta");
+            }
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "contas_fixas",
+        },
+        () => {
+          limparCacheDashboard();
+          carregarCiclosDoMes();
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "despesas_avulsas",
+        },
+        () => {
+          carregarDespesasExtrasDoMes();
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "despesas_avulsas_participantes",
+        },
+        () => {
+          carregarDespesasExtrasDoMes();
+        }
+      )
+      .subscribe();
+  } catch (errRealtime) {
+    console.warn("Aviso ao conectar canal Realtime:", errRealtime);
   }
 }
 
@@ -225,6 +304,7 @@ async function atualizarPainel() {
   }
 
   await carregarCiclosDoMes();
+  await carregarDespesasExtrasDoMes();
   carregarGraficoEvolucao();
 }
 
@@ -241,7 +321,7 @@ async function carregarGraficoEvolucao() {
 
     const idsContas = (contasCasa || []).map((c) => c.id);
     if (idsContas.length === 0) {
-      container.innerHTML = `<p class="texto-suave" style="font-size: 12.5px;">Sem dados suficientes ainda.</p>`;
+      container.innerHTML = `<div style="height: 106px; display: flex; align-items: center; justify-content: center;"><p class="texto-suave" style="font-size: 12.5px; margin: 0;">Sem dados suficientes ainda.</p></div>`;
       return;
     }
 
@@ -277,14 +357,19 @@ async function carregarGraficoEvolucao() {
         ${mesesJanela
           .map((m, idx) => {
             const valor = valores[idx];
-            const alturaPct = Math.max(3, Math.round((valor / maiorValor) * 100));
+            const alturaBarraPx = valor > 0 ? Math.max(8, Math.round((valor / maiorValor) * 58)) : 4;
             const [ano, mes] = m.split("-");
             const nomeMesAbrev = MESES[Number(mes) - 1].slice(0, 3);
             const ehAtual = m === mesAtualChave;
+            const valorFormatado = valor > 0
+              ? (Math.round(valor * 100) % 100 === 0
+                  ? Number(valor).toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+                  : Number(valor).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
+              : "—";
             return `
               <div class="grafico-evolucao-coluna">
-                <span class="grafico-evolucao-valor">${valor > 0 ? formatarMoeda(valor).replace("R$", "").trim() : "—"}</span>
-                <div class="grafico-evolucao-barra ${ehAtual ? "mes-atual" : ""}" style="height: ${alturaPct}%;"></div>
+                <span class="grafico-evolucao-valor">${valorFormatado}</span>
+                <div class="grafico-evolucao-barra ${ehAtual ? "mes-atual" : ""}" style="height: ${alturaBarraPx}px;"></div>
                 <span class="grafico-evolucao-mes">${nomeMesAbrev}</span>
               </div>
             `;
@@ -294,8 +379,89 @@ async function carregarGraficoEvolucao() {
     `;
   } catch (e) {
     console.warn("Erro ao carregar gráfico de evolução:", e);
-    container.innerHTML = "";
+    container.innerHTML = `<div style="height: 118px; display: flex; align-items: center; justify-content: center;"><p class="texto-suave" style="font-size: 12.5px; margin: 0;">Sem dados para exibir.</p></div>`;
   }
+}
+
+// Renderiza a distribuição de despesas por categoria com barras de progresso visuais
+function renderizarCategoriasDoMes(dadosCiclos) {
+  const card = document.getElementById("card-distribuicao-categorias");
+  const container = document.getElementById("lista-categorias-container");
+  if (!card || !container) return;
+
+  const temCiclos = Array.isArray(dadosCiclos) && dadosCiclos.length > 0;
+  const temExtras = Array.isArray(dadosDespesasExtrasCarregadas) && dadosDespesasExtrasCarregadas.length > 0;
+
+  if (!temCiclos && !temExtras) {
+    card.style.display = "none";
+    container.innerHTML = "";
+    return;
+  }
+
+  // Agrupa totais por categoria
+  const totais = {};
+  let totalGeral = 0;
+
+  if (temCiclos) {
+    for (const { conta, ciclo } of dadosCiclos) {
+      if (!ciclo || !ciclo.valor_total) continue;
+      const cat = (conta && conta.categoria) ? conta.categoria : "outros";
+      const valor = Number(ciclo.valor_total || 0);
+      totais[cat] = (totais[cat] || 0) + valor;
+      totalGeral += valor;
+    }
+  }
+
+  if (temExtras) {
+    for (const extra of dadosDespesasExtrasCarregadas) {
+      if (!extra || !extra.valor) continue;
+      const cat = extra.categoria || "outros";
+      const valor = Number(extra.valor || 0);
+      totais[cat] = (totais[cat] || 0) + valor;
+      totalGeral += valor;
+    }
+  }
+
+  const chaves = Object.keys(totais);
+  if (chaves.length === 0 || totalGeral <= 0) {
+    card.style.display = "none";
+    container.innerHTML = "";
+    return;
+  }
+
+  // Ordena por maior valor
+  const ordenado = chaves
+    .map((cat) => ({
+      categoria: cat,
+      valor: totais[cat],
+      pct: Math.round((totais[cat] / totalGeral) * 100),
+      info: typeof obterCategoriaInfo === "function" ? obterCategoriaInfo(cat) : { label: cat, cor: "#2563eb", fundo: "#dbeafe" },
+    }))
+    .sort((a, b) => b.valor - a.valor);
+
+  container.innerHTML = ordenado
+    .map(
+      (item) => `
+    <div class="item-categoria-linha">
+      <div class="item-categoria-topo">
+        <div class="item-categoria-nome">
+          <span class="item-categoria-ponto" style="background: ${item.info.cor};"></span>
+          <span>${escapeHtml(item.info.label)}</span>
+        </div>
+        <div class="item-categoria-valores">
+          <span class="item-categoria-valor">${formatarMoeda(item.valor)}</span>
+          <span class="item-categoria-pct">${item.pct}%</span>
+        </div>
+      </div>
+      <div class="item-categoria-trilho">
+        <div class="item-categoria-progresso" style="width: ${item.pct}%; background: ${item.info.cor};"></div>
+      </div>
+    </div>
+  `
+    )
+    .join("");
+
+  card.style.display = "block";
 }
 
 function renderizarSkeletonCarregando() {
@@ -412,8 +578,10 @@ async function carregarCiclosDoMes() {
         atualizarContadoresFiltros(
           cacheObj.contadores.totalCobrancas,
           cacheObj.contadores.totalPendentes,
-          cacheObj.contadores.totalPagas
+          cacheObj.contadores.totalPagas,
+          cacheObj.contadores.totalEmAnalise || 0
         );
+        renderizarCategoriasDoMes(cacheObj.dadosCiclosCarregados);
         atualizarBannerPessoal(cacheObj.banner?.cobrancaPendenteEu, cacheObj.banner?.totalPendenteEu || 0);
         atualizarAlertasVencimento(cacheObj.dadosCiclosCarregados, mesReferencia);
         calcularComparativoMesAnterior(mesReferencia, cacheObj.metricas?.totalCasa || 0);
@@ -464,7 +632,8 @@ async function carregarCiclosDoMes() {
     `;
     const metricasVazias = { totalCasa: 0, contasQtd: 0, suaParte: 0, seuStatus: "nenhum", totalPagas: 0, totalCobrancas: 0, totalAtrasadas: 0 };
     atualizarMetricas(metricasVazias);
-    atualizarContadoresFiltros(0, 0, 0);
+    atualizarContadoresFiltros(0, 0, 0, 0);
+    renderizarCategoriasDoMes([]);
     atualizarBannerPessoal(null, 0);
     atualizarAlertasVencimento([], mesReferencia);
     calcularComparativoMesAnterior(mesReferencia, 0);
@@ -472,7 +641,7 @@ async function carregarCiclosDoMes() {
     sessionStorage.setItem(cacheKey, JSON.stringify({
       dadosCiclosCarregados: [],
       metricas: metricasVazias,
-      contadores: { totalCobrancas: 0, totalPendentes: 0, totalPagas: 0 },
+      contadores: { totalCobrancas: 0, totalPendentes: 0, totalPagas: 0, totalEmAnalise: 0 },
       banner: { cobrancaPendenteEu: null, totalPendenteEu: 0 }
     }));
     return;
@@ -508,7 +677,8 @@ async function carregarCiclosDoMes() {
     `;
     const metricasVazias = { totalCasa: 0, contasQtd: 0, suaParte: 0, seuStatus: "nenhum", totalPagas: 0, totalCobrancas: 0, totalAtrasadas: 0 };
     atualizarMetricas(metricasVazias);
-    atualizarContadoresFiltros(0, 0, 0);
+    atualizarContadoresFiltros(0, 0, 0, 0);
+    renderizarCategoriasDoMes([]);
     atualizarBannerPessoal(null, 0);
     atualizarAlertasVencimento([], mesReferencia);
     calcularComparativoMesAnterior(mesReferencia, 0);
@@ -516,7 +686,7 @@ async function carregarCiclosDoMes() {
     sessionStorage.setItem(cacheKey, JSON.stringify({
       dadosCiclosCarregados: [],
       metricas: metricasVazias,
-      contadores: { totalCobrancas: 0, totalPendentes: 0, totalPagas: 0 },
+      contadores: { totalCobrancas: 0, totalPendentes: 0, totalPagas: 0, totalEmAnalise: 0 },
       banner: { cobrancaPendenteEu: null, totalPendenteEu: 0 }
     }));
     return;
@@ -534,6 +704,7 @@ async function carregarCiclosDoMes() {
   let totalPendenteEu = 0;
   let totalPagas = 0;
   let totalPendentes = 0;
+  let totalEmAnalise = 0;
   let totalAtrasadas = 0;
   let totalCobrancas = 0;
 
@@ -578,6 +749,8 @@ async function carregarCiclosDoMes() {
       }
       if (c.status === "pago") {
         totalPagas++;
+      } else if (c.status === "em_analise") {
+        totalEmAnalise++;
       } else {
         totalPendentes++;
         const statusEfetivoC = obterStatusEfetivo(c, conta, mesReferencia);
@@ -614,7 +787,7 @@ async function carregarCiclosDoMes() {
   const novoCacheJson = JSON.stringify({
     dadosCiclosCarregados: novosDadosCiclos,
     metricas: metricasCalculadas,
-    contadores: { totalCobrancas, totalPendentes, totalPagas },
+    contadores: { totalCobrancas, totalPendentes, totalPagas, totalEmAnalise },
     banner: { cobrancaPendenteEu, totalPendenteEu }
   });
   // (totalAtrasadas fica dentro de metricasCalculadas, já incluso no cache acima)
@@ -624,7 +797,8 @@ async function carregarCiclosDoMes() {
 
   if (dadosMudaram) {
     atualizarMetricas(metricasCalculadas);
-    atualizarContadoresFiltros(totalCobrancas, totalPendentes, totalPagas);
+    atualizarContadoresFiltros(totalCobrancas, totalPendentes, totalPagas, totalEmAnalise);
+    renderizarCategoriasDoMes(novosDadosCiclos);
     atualizarBannerPessoal(cobrancaPendenteEu, totalPendenteEu);
     atualizarAlertasVencimento(novosDadosCiclos, mesReferencia);
     calcularComparativoMesAnterior(mesReferencia, totalCasa);
@@ -632,13 +806,15 @@ async function carregarCiclosDoMes() {
   }
 }
 
-function atualizarContadoresFiltros(total, pendentes, pagos) {
+function atualizarContadoresFiltros(total, pendentes, pagos, emAnalise = 0) {
   const elTodos = document.getElementById("cont-filtro-todos");
   const elPend = document.getElementById("cont-filtro-pendentes");
   const elPag = document.getElementById("cont-filtro-pagos");
+  const elAnalise = document.getElementById("cont-filtro-analise");
   if (elTodos) elTodos.textContent = total;
   if (elPend) elPend.textContent = pendentes;
   if (elPag) elPag.textContent = pagos;
+  if (elAnalise) elAnalise.textContent = emAnalise;
 }
 
 // Calcula o status "de verdade" de uma cobrança comparando o dia de
@@ -649,6 +825,7 @@ function atualizarContadoresFiltros(total, pendentes, pagos) {
 // cobranca.status cru para decidir o que exibir.
 function obterStatusEfetivo(cobranca, conta, mesReferencia) {
   if (cobranca.status === "pago") return "pago";
+  if (cobranca.status === "em_analise") return "em_analise";
   if (!conta || !conta.dia_vencimento || !mesReferencia) return cobranca.status || "pendente";
 
   const partes = mesReferencia.split("-");
@@ -679,6 +856,9 @@ function localizarContextoCobranca(cobrancaId) {
 function calcularStatusVencimento(cobranca, conta, mesReferencia) {
   if (cobranca.status === "pago") {
     return { texto: "Pago", classe: "pago" };
+  }
+  if (cobranca.status === "em_analise") {
+    return { texto: "Em Análise", classe: "em_analise" };
   }
 
   if (!conta || !conta.dia_vencimento || !mesReferencia) {
@@ -892,7 +1072,8 @@ function renderizarCiclosNaTela(animar = false) {
     // Aplica filtro por status
     const listaFiltrada = cobrancas.filter((c) => {
       if (filtroMoradorAtual !== "todos" && c.usuario_id !== filtroMoradorAtual) return false;
-      if (filtroAtual === "pendente") return c.status !== "pago";
+      if (filtroAtual === "pendente") return c.status !== "pago" && c.status !== "em_analise";
+      if (filtroAtual === "em_analise") return c.status === "em_analise";
       if (filtroAtual === "pago") return c.status === "pago";
       return true; // 'todos'
     });
@@ -981,7 +1162,10 @@ function renderizarCiclosNaTela(animar = false) {
                 `
                     : `<span class="espaco-acao-vazio" aria-hidden="true"></span>`
                 }
-                <button class="btn-icone ${c.status === 'pago' ? 'btn-icone-pix-pago' : 'btn-icone-pix-pendente'}" onclick="abrirModalPix('${c.id}')" title="${c.status === 'pago' ? 'Pix pago (ver dados)' : 'Pix pendente (ver QR Code e pagar)'}" aria-label="Pix">
+                ${
+                  isEu
+                    ? `
+                <button class="btn-icone ${c.status === 'pago' ? 'btn-icone-pix-pago' : 'btn-icone-pix-pendente'}" onclick="abrirModalPix('${c.id}')" title="${c.status === 'pago' ? 'Pix pago (ver dados)' : 'Pagar minha parte via Pix'}" aria-label="Pagar Pix">
                   <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <rect x="3" y="3" width="7" height="7" rx="1.5"></rect>
                     <rect x="14" y="3" width="7" height="7" rx="1.5"></rect>
@@ -993,11 +1177,20 @@ function renderizarCiclosNaTela(animar = false) {
                     <path d="M17 17h.01"></path>
                   </svg>
                 </button>
-                <button class="btn-icone btn-icone-whatsapp" onclick="enviarCobrancaWhatsApp('${c.id}', '${encodeURIComponent(conta.nome)}', ${c.status === 'pago'})" title="${c.status === 'pago' ? 'Avisar recebimento no WhatsApp' : 'Pedir e cobrar no WhatsApp'}" aria-label="WhatsApp">
+                `
+                    : `<span class="espaco-acao-vazio" aria-hidden="true"></span>`
+                }
+                ${
+                  isEu || ehAdmin
+                    ? `
+                <button class="btn-icone btn-icone-whatsapp" onclick="enviarCobrancaWhatsApp('${c.id}', '${encodeURIComponent(conta.nome)}', ${c.status === 'pago'})" title="${isEu ? (c.status === 'pago' ? 'Avisar comprovante no WhatsApp' : 'Avisar pagamento no WhatsApp') : (c.status === 'pago' ? 'Confirmar recebimento no WhatsApp' : 'Cobrar morador no WhatsApp')}" aria-label="WhatsApp">
                   <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
                   </svg>
                 </button>
+                `
+                    : `<span class="espaco-acao-vazio" aria-hidden="true"></span>`
+                }
               </div>
             </div>
           </div>
@@ -1017,6 +1210,20 @@ function renderizarCiclosNaTela(animar = false) {
           </div>
           <h4>Tudo pago por aqui!</h4>
           <p>Nenhuma conta pendente para este mês. Todas as cobranças foram quitadas.</p>
+        </div>
+      `;
+    } else if (filtroAtual === "em_analise") {
+      container.innerHTML = `
+        <div class="estado-vazio">
+          <div class="estado-vazio-icone neutro">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="8" x2="12" y2="12"/>
+              <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+          </div>
+          <h4>Nenhum comprovante em análise</h4>
+          <p>Não há pagamentos aguardando conferência no momento.</p>
         </div>
       `;
     } else if (filtroAtual === "pago") {
@@ -1119,7 +1326,7 @@ function atualizarMetricas({ totalCasa, contasQtd, suaParte, seuStatus, totalPag
 }
 
 function textoStatus(status) {
-  return { pago: "Pago", pendente: "Pendente", atrasado: "Atrasado" }[status] || status;
+  return { pago: "Pago", em_analise: "Em Análise", pendente: "Pendente", atrasado: "Atrasado" }[status] || status;
 }
 
 function configurarAcoesDashboard() {
@@ -1183,6 +1390,21 @@ function limparCacheDashboard() {
 }
 
 async function garantirCobrancasDoMes(mesReferencia, contas, forcarSincronizacao = false) {
+  // 1. Tenta a sincronização atômica instantânea via RPC no PostgreSQL
+  if (!forcarSincronizacao) {
+    try {
+      const { data: okRpc, error: errRpc } = await supabaseClient.rpc("sincronizar_cobrancas_mes", {
+        p_casa_id: casaId,
+        p_mes: mesReferencia,
+      });
+      if (!errRpc && okRpc) {
+        return; // Sincronizado com sucesso e atomicamente pelo banco!
+      }
+    } catch (e) {
+      console.warn("Aviso ao sincronizar via RPC, usando fallback cliente:", e);
+    }
+  }
+
   const { data: membros } = await supabaseClient
     .from("membros_casa")
     .select("usuario_id, entrou_em")
@@ -1465,7 +1687,7 @@ async function ajustarValorCiclo(cicloId, nomeContaEnc, valorAtual, contaId = nu
       <p style="margin-bottom: 12px;">Altere o valor desta fatura no mês. A divisão será recalculada automaticamente.</p>
       <div style="margin-bottom: 16px; text-align: left;">
         <label for="input-ajuste-valor" style="margin-top: 0;">Valor total da fatura (R$)</label>
-        <input type="number" id="input-ajuste-valor" step="0.01" min="0" value="${valorAtual}" style="font-size: 16px; font-weight: 700;" />
+        <input type="number" id="input-ajuste-valor" step="0.01" min="0" value="${valorAtual}" style="font-size: 16px; font-weight: 700;" inputmode="decimal" />
       </div>
       <div class="modal-botoes-grid">
         <button type="button" class="secundario" id="btn-ajuste-cancelar">Cancelar</button>
@@ -1694,10 +1916,19 @@ async function abrirModalPix(cobrancaId) {
     });
   }
 
-  // 4. Gera imagem de QR Code
+  // 4. Gera imagem de QR Code localmente (100% offline e privado, com fallback para API remota)
   let qrCodeImg = cobranca.pix_qrcode;
   if (!qrCodeImg && payloadPix) {
-    qrCodeImg = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(payloadPix)}`;
+    if (typeof window.gerarQRCodeDataURL === "function") {
+      try {
+        qrCodeImg = window.gerarQRCodeDataURL(payloadPix, { tamanho: 240, margem: 4 });
+      } catch (errQr) {
+        console.warn("Aviso ao gerar QR Code localmente:", errQr);
+      }
+    }
+    if (!qrCodeImg) {
+      qrCodeImg = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(payloadPix)}`;
+    }
   }
 
   let htmlPix = `<div class="qr-box">`;
@@ -1786,8 +2017,32 @@ async function abrirModalPix(cobrancaId) {
     </button>
   `;
 
+  if (statusEfetivo === "em_analise") {
+    htmlPix += `
+      <div style="background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.35); border-radius: 8px; padding: 10px; margin: 10px 0 4px; text-align: center;">
+        <span style="font-size: 12.5px; font-weight: 600; color: #b45309;">Comprovante anexado aguardando validação do administrador.</span>
+      </div>
+    `;
+  }
+
   if (ehAdmin) {
-    if (cobranca.status !== "pago") {
+    if (statusEfetivo === "em_analise") {
+      htmlPix += `
+        <button class="pequeno btn-aprovar-comprovante" style="margin-top:8px; width:100%;" onclick="confirmarPagamentoSimulado('${cobranca.id}')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle; margin-right:4px;">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+          Aprovar Comprovante (Marcar como Pago)
+        </button>
+        <button class="pequeno btn-recusar-comprovante" style="margin-top:6px; width:100%;" onclick="recusarComprovante('${cobranca.id}')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle; margin-right:4px;">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+          Recusar Comprovante
+        </button>
+      `;
+    } else if (cobranca.status !== "pago") {
       htmlPix += `
         <button class="pequeno sucesso-btn" style="margin-top:8px; width:100%;" onclick="confirmarPagamentoSimulado('${cobranca.id}')">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle; margin-right:4px;">
@@ -1837,7 +2092,7 @@ async function enviarCobrancaWhatsApp(cobrancaId, nomeContaOpcional = null, jaPa
 
   let texto = "";
   if (estaPago) {
-    texto = `*Rachaê - Pagamento Confirmado* ✅\n`;
+    texto = `*Rachaê - Pagamento Confirmado*\n`;
     texto += `Olá, *${nomeMorador}*!\n\n`;
     texto += `Confirmamos o recebimento do seu pagamento de *${valorFormatado}* referente à conta *${nomeConta}* (${mesFormatado}).\n\n`;
     texto += `Tudo certo por aqui, pagamento registrado com sucesso. Muito obrigado!`;
@@ -1913,19 +2168,26 @@ function exportarCsvMes() {
   const nomeMes = MESES[dataSelecionada.getMonth()];
   const ano = dataSelecionada.getFullYear();
 
-  const linhas = [["Conta", "Morador", "Valor", "Status", "Vencimento"]];
+  const linhas = [["Conta", "Categoria", "Morador", "Valor (R$)", "Status", "Vencimento", "Data Pagamento", "Comprovante"]];
 
   for (const { conta, cobrancas, mesReferencia } of dadosCiclosCarregados) {
+    const catInfo = typeof obterCategoriaInfo === "function" ? obterCategoriaInfo(conta.categoria) : { label: "Outros" };
     for (const c of cobrancas || []) {
       const nomeMorador = c.profiles ? c.profiles.nome : "Morador";
       const statusEfetivo = obterStatusEfetivo(c, conta, mesReferencia);
       const dataVenc = conta.dia_vencimento ? `${String(conta.dia_vencimento).padStart(2, "0")}/${String(dataSelecionada.getMonth() + 1).padStart(2, "0")}/${ano}` : "";
+      const dataPagamento = c.pago_em ? new Date(c.pago_em).toLocaleDateString("pt-BR") : "";
+      const temComprovante = c.comprovante_url ? "Sim" : "Não";
+
       linhas.push([
         conta.nome,
+        catInfo.label,
         nomeMorador,
         Number(c.valor || 0).toFixed(2).replace(".", ","),
         textoStatus(statusEfetivo),
         dataVenc,
+        dataPagamento,
+        temComprovante,
       ]);
     }
   }
@@ -1986,11 +2248,25 @@ async function confirmarPagamentoSimulado(cobrancaId) {
   if (isMock && window.RachaFixoMock) {
     await window.RachaFixoMock.simularPagamento(cobrancaId);
   } else {
-    await supabaseClient
-      .from("cobrancas_individuais")
-      .update({ status: "pago", pago_em: new Date().toISOString() })
-      .eq("id", cobrancaId);
+    // Tenta executar via RPC segura
+    const { error: rpcError } = await supabaseClient.rpc("confirmar_pagamento_cobranca", {
+      p_cobranca_id: cobrancaId,
+    });
+
+    if (rpcError) {
+      // Fallback para update direto se a função RPC ainda não tiver sido criada no banco
+      const { error: updateError } = await supabaseClient
+        .from("cobrancas_individuais")
+        .update({ status: "pago", pago_em: new Date().toISOString() })
+        .eq("id", cobrancaId);
+
+      if (updateError) {
+        mostrarToast("Erro ao confirmar pagamento: " + (updateError.message || rpcError.message), "alerta");
+        return;
+      }
+    }
   }
+  if (typeof window.vibrar === "function") window.vibrar([20, 40, 20]);
   fecharModalPix();
   limparCacheDashboard();
   mostrarToast("Pagamento registrado com sucesso!");
@@ -2002,14 +2278,56 @@ async function reverterParaPendente(cobrancaId) {
   if (isMock && window.RachaFixoMock) {
     await window.RachaFixoMock.reverterPagamento(cobrancaId);
   } else {
-    await supabaseClient
-      .from("cobrancas_individuais")
-      .update({ status: "pendente", pago_em: null })
-      .eq("id", cobrancaId);
+    // Tenta executar via RPC segura
+    const { error: rpcError } = await supabaseClient.rpc("reverter_pagamento_cobranca", {
+      p_cobranca_id: cobrancaId,
+    });
+
+    if (rpcError) {
+      // Fallback para update direto se a função RPC ainda não tiver sido criada no banco
+      const { error: updateError } = await supabaseClient
+        .from("cobrancas_individuais")
+        .update({ status: "pendente", pago_em: null })
+        .eq("id", cobrancaId);
+
+      if (updateError) {
+        mostrarToast("Erro ao reverter cobrança: " + (updateError.message || rpcError.message), "alerta");
+        return;
+      }
+    }
   }
   fecharModalPix();
   limparCacheDashboard();
   mostrarToast("Cobrança revertida para pendente.");
+  await carregarCiclosDoMes();
+}
+
+async function recusarComprovante(cobrancaId) {
+  const isMock = typeof ehModoMock !== "undefined" ? ehModoMock : false;
+  if (isMock && window.RachaFixoMock) {
+    mostrarToast("Comprovante recusado no modo teste.");
+  } else {
+    // Tenta executar via RPC segura
+    const { error: rpcError } = await supabaseClient.rpc("recusar_comprovante_cobranca", {
+      p_cobranca_id: cobrancaId,
+    });
+
+    if (rpcError) {
+      // Fallback para update direto se a função RPC ainda não tiver sido criada no banco
+      const { error: updateError } = await supabaseClient
+        .from("cobrancas_individuais")
+        .update({ status: "pendente", comprovante_url: null })
+        .eq("id", cobrancaId);
+
+      if (updateError) {
+        mostrarToast("Erro ao recusar comprovante: " + (updateError.message || rpcError.message), "alerta");
+        return;
+      }
+    }
+  }
+  fecharModalPix();
+  limparCacheDashboard();
+  mostrarToast("Comprovante recusado. A cobrança retornou para pendente.", "alerta");
   await carregarCiclosDoMes();
 }
 
@@ -2089,12 +2407,22 @@ function enviarResumoGrupoWhatsApp() {
 function fecharModalPix() {
   const modalPixEl = document.getElementById("modal-pix");
   const cardModalPixEl = document.getElementById("card-modal-pix");
-  if (window.Animacoes) {
-    window.Animacoes.animarFechamentoModal(modalPixEl, cardModalPixEl);
+  if (!modalPixEl) return;
+  const fecharImediato = () => {
+    modalPixEl.style.setProperty("display", "none", "important");
+    modalPixEl.classList.remove("ativo");
+  };
+  if (window.Animacoes && typeof window.Animacoes.animarFechamentoModal === "function") {
+    try {
+      window.Animacoes.animarFechamentoModal(modalPixEl, cardModalPixEl, fecharImediato);
+    } catch (e) {
+      fecharImediato();
+    }
   } else {
-    modalPixEl.style.display = "none";
+    fecharImediato();
   }
 }
+window.fecharModalPix = fecharModalPix;
 
 function configurarModalPixEventos() {
   const modalPix = document.getElementById("modal-pix");
@@ -2110,6 +2438,29 @@ function configurarModalPixEventos() {
       if (e.target === modalLembretes) fecharModalLembretes();
     };
   }
+
+  const modalExtra = document.getElementById("modal-despesa-extra");
+  if (modalExtra) {
+    modalExtra.onclick = (e) => {
+      if (e.target === modalExtra) fecharModalDespesaExtra();
+    };
+    const btnX = modalExtra.querySelector(".btn-fechar-modal-x");
+    if (btnX) {
+      btnX.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        fecharModalDespesaExtra();
+      };
+    }
+    const btnCancelar = modalExtra.querySelector(".btn-despesa-cancelar");
+    if (btnCancelar) {
+      btnCancelar.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        fecharModalDespesaExtra();
+      };
+    }
+  }
 }
 
 // ============================================================
@@ -2122,6 +2473,8 @@ function abrirCentralLembretes() {
   const modal = document.getElementById("modal-lembretes");
   const lista = document.getElementById("lista-lembretes");
   if (!modal || !lista) return;
+
+  atualizarBotaoNotificacoesUI();
 
   const mapaCoresMoradores = atribuirCoresMoradores(
     (dadosCiclosCarregados || []).flatMap(({ cobrancas }) => (cobrancas || []).map((c) => c.usuario_id))
@@ -2145,6 +2498,26 @@ function abrirCentralLembretes() {
       if (statusEfetivo === "atrasado") {
         mapaPendencias[uId].atrasado = true;
       }
+    }
+  }
+
+  // Inclui também pendências de despesas extras / mercado
+  for (const d of dadosDespesasExtrasCarregadas || []) {
+    const parts = d.despesas_avulsas_participantes || d.participantes || [];
+    for (const part of parts) {
+      if (part.pago) continue;
+      const uId = part.usuario_id;
+      const nomePart = part.profiles?.nome || "Morador";
+      const telPart = part.profiles?.telefone || null;
+      if (!mapaPendencias[uId]) {
+        mapaPendencias[uId] = {
+          nome: nomePart,
+          telefone: telPart,
+          total: 0,
+          atrasado: false,
+        };
+      }
+      mapaPendencias[uId].total += Number(part.valor_cota || 0);
     }
   }
 
@@ -2208,28 +2581,935 @@ function abrirCentralLembretes() {
 function fecharModalLembretes() {
   const modal = document.getElementById("modal-lembretes");
   const card = document.getElementById("card-modal-lembretes");
-  if (window.Animacoes) {
-    window.Animacoes.animarFechamentoModal(modal, card);
-  } else if (modal) {
-    modal.style.display = "none";
+  if (!modal) return;
+  const fecharImediato = () => {
+    modal.style.setProperty("display", "none", "important");
+    modal.classList.remove("ativo");
+  };
+  if (window.Animacoes && typeof window.Animacoes.animarFechamentoModal === "function") {
+    try {
+      window.Animacoes.animarFechamentoModal(modal, card, fecharImediato);
+    } catch (e) {
+      fecharImediato();
+    }
+  } else {
+    fecharImediato();
   }
 }
 window.fecharModalLembretes = fecharModalLembretes;
 
-// Fecha modal Pix com a tecla ESC
-if (!window._modalPixKeydownBound) {
-  window._modalPixKeydownBound = true;
+// Fecha modais com a tecla ESC
+if (!window._modaisDashboardKeydownBound) {
+  window._modaisDashboardKeydownBound = true;
   document.addEventListener("keydown", (e) => {
-    const modalPix = document.getElementById("modal-pix");
-    if (e.key === "Escape" && modalPix && modalPix.style.display === "flex") {
-      fecharModalPix();
+    if (e.key === "Escape") {
+      const modalPix = document.getElementById("modal-pix");
+      if (modalPix && modalPix.style.display === "flex") {
+        fecharModalPix();
+      }
+      const modalExtra = document.getElementById("modal-despesa-extra");
+      if (modalExtra && modalExtra.style.display === "flex") {
+        fecharModalDespesaExtra();
+      }
+      const modalLembretes = document.getElementById("modal-lembretes");
+      if (modalLembretes && modalLembretes.style.display === "flex") {
+        fecharModalLembretes();
+      }
     }
   });
+}
+
+// ============================================================
+// FASE 3: Central de Lembretes & Cobrança Rápida Consolidada
+// ============================================================
+async function copiarResumoPendentesGrupo() {
+  const mapaPendencias = {};
+
+  // 1. Contas fixas do mês
+  for (const { conta, cobrancas, mesReferencia } of dadosCiclosCarregados || []) {
+    for (const c of cobrancas || []) {
+      if (c.status === "pago") continue;
+      const statusEfetivo = obterStatusEfetivo(c, conta, mesReferencia);
+      const uId = c.usuario_id;
+      if (!mapaPendencias[uId]) {
+        mapaPendencias[uId] = {
+          nome: c.profiles ? c.profiles.nome : "Morador",
+          total: 0,
+          atrasado: false,
+          itens: [],
+        };
+      }
+      mapaPendencias[uId].total += Number(c.valor || 0);
+      mapaPendencias[uId].itens.push(conta.nome);
+      if (statusEfetivo === "atrasado") {
+        mapaPendencias[uId].atrasado = true;
+      }
+    }
+  }
+
+  // 2. Despesas extras / mercado
+  for (const d of dadosDespesasExtrasCarregadas || []) {
+    const parts = d.despesas_avulsas_participantes || d.participantes || [];
+    for (const part of parts) {
+      if (part.pago) continue;
+      const uId = part.usuario_id;
+      const nomePart = part.profiles?.nome || "Morador";
+      if (!mapaPendencias[uId]) {
+        mapaPendencias[uId] = {
+          nome: nomePart,
+          total: 0,
+          atrasado: false,
+          itens: [],
+        };
+      }
+      mapaPendencias[uId].total += Number(part.valor_cota || 0);
+      mapaPendencias[uId].itens.push(`${d.descricao} (Extra)`);
+    }
+  }
+
+  const pendentesList = Object.values(mapaPendencias);
+  if (pendentesList.length === 0) {
+    mostrarToast("Tudo em dia! Ninguém possui contas pendentes neste mês.", "sucesso");
+    return;
+  }
+
+  // Busca dados Pix da casa
+  let chavePix = null;
+  let tipoPix = "";
+  let titularPix = "";
+  let bancoPix = "";
+
+  try {
+    const { data: casaData } = await supabaseClient
+      .from("casas")
+      .select("nome, chave_pix, tipo_chave_pix, nome_titular_pix, banco_pix")
+      .eq("id", casaId)
+      .maybeSingle();
+
+    if (casaData) {
+      chavePix = casaData.chave_pix;
+      tipoPix = casaData.tipo_chave_pix || "";
+      titularPix = casaData.nome_titular_pix || "";
+      bancoPix = casaData.banco_pix || "";
+    }
+  } catch (e) {
+    console.warn("Aviso ao buscar Pix da casa para cobrança:", e);
+  }
+
+  const nomeCasa = localStorage.getItem("casa_nome") || "Rachaê";
+  const nomeMes = MESES[dataSelecionada.getMonth()];
+  const ano = dataSelecionada.getFullYear();
+
+  let texto = `📢 *RESUMO DE CONTAS — ${nomeCasa.toUpperCase()}*\n`;
+  texto += `📅 *Mês de Referência:* ${nomeMes}/${ano}\n\n`;
+  texto += `💸 *Pendências em aberto:*\n`;
+
+  for (const info of pendentesList) {
+    const statusTag = info.atrasado ? "⚠️ Atrasado" : "⏳ Pendente";
+    const itensStr = info.itens.length > 0 ? ` (${info.itens.slice(0, 3).join(", ")}${info.itens.length > 3 ? "..." : ""})` : "";
+    texto += `• *${info.nome}:* ${formatarMoeda(info.total)} — ${statusTag}${itensStr}\n`;
+  }
+
+  if (chavePix) {
+    texto += `\n🔑 *Chave Pix da Casa (Contas Fixas):* ${chavePix}`;
+    if (tipoPix) texto += ` (${tipoPix.toUpperCase()})`;
+    if (titularPix) texto += `\n👤 *Titular:* ${titularPix}`;
+    if (bancoPix) texto += `\n🏦 *Banco:* ${bancoPix}`;
+  }
+
+  // Pendências de Despesas Extras / Mercado / Rateio entre moradores
+  const pendenciasExtras = [];
+  (dadosDespesasExtrasCarregadas || []).forEach((d) => {
+    const pagador = (dadosMoradoresCasa || []).find((m) => m.id === d.pago_por_id) || d.profiles || {};
+    const partes = d.despesas_avulsas_participantes || d.participantes || [];
+    partes.forEach((p) => {
+      if (!p.pago && p.usuario_id !== d.pago_por_id) {
+        const devedor = (dadosMoradoresCasa || []).find((m) => m.id === p.usuario_id) || p.profiles || {};
+        const pixFormatado = pagador.chave_pix
+          ? (typeof window.formatarChavePixGenerica === "function"
+              ? window.formatarChavePixGenerica(pagador.chave_pix, pagador.tipo_chave_pix || "telefone")
+              : pagador.chave_pix)
+          : null;
+        pendenciasExtras.push({
+          despesa: d.descricao,
+          devedor: devedor.nome || "Morador",
+          pagador: pagador.nome || "Morador",
+          valor: Number(p.valor_cota || 0),
+          pixPagador: pixFormatado ? `${pixFormatado} (${pagador.tipo_chave_pix || "Pix"})` : null,
+        });
+      }
+    });
+  });
+
+  if (pendenciasExtras.length > 0) {
+    texto += `\n\n🛒 *Reembolsos de Despesas Extras / Mercado:*\n`;
+    for (const item of pendenciasExtras) {
+      texto += `• *${item.devedor}* deve ${formatarMoeda(item.valor)} para *${item.pagador}* (${item.despesa})`;
+      if (item.pixPagador) {
+        texto += `\n  ↳ _Pix de ${item.pagador}:_ ${item.pixPagador}`;
+      }
+      texto += `\n`;
+    }
+  }
+
+  texto += `\n\n📲 _Por favor, realizem o pagamento e anexem o comprovante no app Rachaê para darmos baixa!_ 🙌`;
+
+  try {
+    await navigator.clipboard.writeText(texto);
+    mostrarToast("Resumo copiado! Cole no grupo do WhatsApp.", "sucesso");
+  } catch (err) {
+    const ta = document.createElement("textarea");
+    ta.value = texto;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    document.body.removeChild(ta);
+    mostrarToast("Resumo copiado! Cole no grupo do WhatsApp.", "sucesso");
+  }
+}
+
+function atualizarBotaoNotificacoesUI() {
+  const btn = document.getElementById("btn-ativar-notificacoes");
+  if (!btn) return;
+
+  if (!("Notification" in window)) {
+    btn.style.display = "none";
+    return;
+  }
+
+  btn.style.display = "block";
+  if (Notification.permission === "granted") {
+    btn.textContent = "Lembretes locais ativos";
+    btn.style.opacity = "0.75";
+  } else if (Notification.permission === "denied") {
+    btn.textContent = "Notificações bloqueadas no navegador";
+    btn.style.opacity = "0.6";
+    btn.disabled = true;
+  } else {
+    btn.textContent = "Ativar lembretes no celular / PC";
+    btn.style.opacity = "1";
+    btn.disabled = false;
+  }
+}
+
+async function solicitarPermissaoNotificacoes() {
+  if (!("Notification" in window)) {
+    mostrarToast("Seu dispositivo ou navegador não suporta notificações locais.", "aviso");
+    return;
+  }
+
+  if (Notification.permission === "granted") {
+    try {
+      new Notification("Rachaê", {
+        body: "Lembretes locais já estão ativados no seu dispositivo!",
+        icon: "icons/icon-192.png",
+      });
+      mostrarToast("Notificações já estão ativas!", "sucesso");
+    } catch (e) {
+      mostrarToast("Notificações ativas!", "sucesso");
+    }
+    return;
+  }
+
+  if (Notification.permission === "denied") {
+    mostrarToast("Notificações estão bloqueadas nas permissões do seu navegador.", "aviso");
+    return;
+  }
+
+  try {
+    const permissao = await Notification.requestPermission();
+    atualizarBotaoNotificacoesUI();
+    if (permissao === "granted") {
+      new Notification("Rachaê", {
+        body: "Lembretes ativados com sucesso! Avisaremos sobre as despesas da casa.",
+        icon: "icons/icon-192.png",
+      });
+      mostrarToast("Lembretes ativados com sucesso!", "sucesso");
+    } else {
+      mostrarToast("Permissão de notificações não concedida.", "aviso");
+    }
+  } catch (err) {
+    console.warn("Erro ao solicitar notificações:", err);
+  }
+}
+
+// ============================================================
+// FASE 3: Despesas Extras & Mercado ("Racha-Avulso")
+// ============================================================
+function formatarDataSimples(dataStr) {
+  if (!dataStr) return "";
+  const partes = String(dataStr).split("-");
+  if (partes.length === 3) return `${partes[2]}/${partes[1]}`;
+  return dataStr;
+}
+
+function obterIconeCategoriaExtra(categoria) {
+  switch (categoria) {
+    case "alimentacao":
+      return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>`;
+    case "contas":
+      return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>`;
+    case "moradia":
+      return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>`;
+    case "lazer":
+      return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`;
+    default:
+      return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>`;
+  }
+}
+
+function obterNomeCategoriaExtra(categoria) {
+  switch (categoria) {
+    case "alimentacao": return "Alimentação / Mercado";
+    case "contas": return "Limpeza / Consumo";
+    case "moradia": return "Manutenção / Casa";
+    case "lazer": return "Lazer / Churrasco";
+    default: return "Outros / Compras";
+  }
+}
+
+async function carregarMoradoresCasa() {
+  if (!casaId) return [];
+  try {
+    const { data: membros, error } = await supabaseClient
+      .from("membros_casa")
+      .select("usuario_id, papel, profiles ( id, nome, telefone, chave_pix, tipo_chave_pix, nome_titular_pix, banco_pix )")
+      .eq("casa_id", casaId);
+
+    if (error) {
+      console.warn("Aviso ao carregar membros da casa:", error);
+      return dadosMoradoresCasa;
+    }
+
+    dadosMoradoresCasa = (membros || []).map((m) => ({
+      id: m.usuario_id,
+      nome: m.profiles?.nome || "Morador",
+      telefone: m.profiles?.telefone || null,
+      papel: m.papel || "morador",
+      chave_pix: m.profiles?.chave_pix || null,
+      tipo_chave_pix: m.profiles?.tipo_chave_pix || "telefone",
+      nome_titular_pix: m.profiles?.nome_titular_pix || null,
+      banco_pix: m.profiles?.banco_pix || null,
+    }));
+
+    return dadosMoradoresCasa;
+  } catch (err) {
+    console.warn("Erro ao buscar moradores da casa:", err);
+    return dadosMoradoresCasa;
+  }
+}
+
+async function carregarDespesasExtrasDoMes() {
+  const container = document.getElementById("lista-despesas-extras");
+  if (!container || !casaId) return;
+
+  try {
+    await carregarMoradoresCasa();
+    const mapaMoradores = {};
+    (dadosMoradoresCasa || []).forEach((m) => {
+      mapaMoradores[m.id] = m;
+    });
+
+    const mesRef = primeiroDiaDoMes();
+    const { data: dataDespesas, error: errDespesas } = await supabaseClient
+      .from("despesas_avulsas")
+      .select("*")
+      .eq("casa_id", casaId)
+      .eq("mes_referencia", mesRef)
+      .order("data", { ascending: false });
+
+    if (errDespesas) {
+      console.warn("Aviso ao carregar despesas extras:", errDespesas);
+      container.innerHTML = `
+        <div class="estado-vazio" style="padding: 20px 16px;">
+          <p class="texto-suave" style="font-size: 13px;">Módulo pronto. Se executou o script agora, atualize a página.</p>
+        </div>
+      `;
+      dadosDespesasExtrasCarregadas = [];
+      return;
+    }
+
+    const idsDespesas = (dataDespesas || []).map((d) => d.id);
+    const mapaParticipantes = {};
+
+    if (idsDespesas.length > 0) {
+      const { data: dataParts, error: errParts } = await supabaseClient
+        .from("despesas_avulsas_participantes")
+        .select("*")
+        .in("despesa_id", idsDespesas);
+
+      if (!errParts && dataParts) {
+        dataParts.forEach((part) => {
+          if (!mapaParticipantes[part.despesa_id]) {
+            mapaParticipantes[part.despesa_id] = [];
+          }
+          const moradorInfo = mapaMoradores[part.usuario_id] || { nome: "Morador" };
+          mapaParticipantes[part.despesa_id].push({
+            ...part,
+            profiles: moradorInfo,
+          });
+        });
+      }
+    }
+
+    dadosDespesasExtrasCarregadas = (dataDespesas || []).map((d) => {
+      const pagadorInfo = mapaMoradores[d.pago_por_id] || { nome: "Morador" };
+      const partes = mapaParticipantes[d.id] || [];
+      return {
+        ...d,
+        profiles: pagadorInfo,
+        participantes: partes,
+        despesas_avulsas_participantes: partes,
+      };
+    });
+
+    renderizarDespesasExtrasNaTela(dadosDespesasExtrasCarregadas);
+    if (typeof renderizarCategoriasDoMes === "function") {
+      renderizarCategoriasDoMes(dadosCiclosCarregados);
+    }
+  } catch (err) {
+    console.warn("Erro ao carregar despesas extras:", err);
+    dadosDespesasExtrasCarregadas = [];
+  }
+}
+
+function renderizarDespesasExtrasNaTela(despesas) {
+  const container = document.getElementById("lista-despesas-extras");
+  if (!container) return;
+
+  if (!despesas || despesas.length === 0) {
+    container.innerHTML = `
+      <div class="estado-vazio" style="padding: 24px 16px;">
+        <div class="estado-vazio-icone" style="background: rgba(16, 185, 129, 0.1); color: var(--cor-sucesso);">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="9" cy="21" r="1"></circle>
+            <circle cx="20" cy="21" r="1"></circle>
+            <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
+          </svg>
+        </div>
+        <h4 style="margin: 8px 0 4px; font-size: 15px;">Nenhuma despesa extra neste mês</h4>
+        <p style="margin: 0; font-size: 13px; color: var(--cor-texto-suave);">Compras de supermercado, produtos de limpeza ou churrascos divididos aparecerão aqui.</p>
+      </div>
+    `;
+    return;
+  }
+
+  const ehAdmin = papelUsuarioAtual === "admin";
+
+  const html = despesas
+    .map((d, indexDespesa) => {
+      const participantes = d.despesas_avulsas_participantes || d.participantes || [];
+      const pagadorMorador = (dadosMoradoresCasa || []).find((m) => m.id === d.pago_por_id) || d.profiles || {};
+      const pagadorNome = pagadorMorador.nome || d.profiles?.nome || "Morador";
+      const ehPagador = d.pago_por_id === usuarioAtualId;
+      const podeGerenciar = ehPagador || ehAdmin;
+
+      // Reembolsos reais (exclui quem pagou a despesa do total a reembolsar)
+      const outrosParticipantes = participantes.filter((p) => p.usuario_id !== d.pago_por_id);
+      const totalReembolsar = outrosParticipantes.length;
+      const pagosReembolsos = outrosParticipantes.filter((p) => p.pago).length;
+      const todasPagas = totalReembolsar > 0 && pagosReembolsos === totalReembolsar;
+
+      const dataFormatada = formatarDataSimples(d.data);
+
+      // Paleta de cores para os avatares dos participantes desta despesa
+      const mapaCoresParticipantes = atribuirCoresMoradores(participantes.map((p) => p.usuario_id));
+
+      const cotasHtml = participantes
+        .map((p) => {
+          const moradorCota = (dadosMoradoresCasa || []).find((m) => m.id === p.usuario_id) || p.profiles || {};
+          const nomeMorador = moradorCota.nome || (p.usuario_id === usuarioAtualId ? "Você" : "Morador");
+          const isPago = Boolean(p.pago);
+          const isPayerSelf = p.usuario_id === d.pago_por_id;
+          const isEu = p.usuario_id === usuarioAtualId;
+
+          let badgeClasse = "pendente";
+          let badgeTexto = "Pendente";
+          if (isPayerSelf) {
+            badgeClasse = "pago";
+            badgeTexto = "Pagador";
+          } else if (isPago) {
+            badgeClasse = "pago";
+            badgeTexto = "Reembolsado";
+          }
+
+          let acoesHtml = "";
+          if (isPayerSelf) {
+            // O pagador titular não possui ações de cobrança/pix sobre si mesmo
+            acoesHtml = `
+              <span class="espaco-acao-vazio" aria-hidden="true"></span>
+              <span class="espaco-acao-vazio" aria-hidden="true"></span>
+              <span class="espaco-acao-vazio" aria-hidden="true"></span>
+            `;
+          } else if (isEu) {
+            // Morador logado olhando sua própria cota nesta despesa
+            if (!isPago) {
+              acoesHtml = `
+                <span class="espaco-acao-vazio" aria-hidden="true"></span>
+                <button type="button" class="btn-icone btn-icone-pix-pendente" onclick="abrirModalPixDespesaExtra('${d.id}', '${p.usuario_id}')" title="Pagar Pix a ${escapeHtml(pagadorNome)}" aria-label="Pagar Pix">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="3" width="7" height="7" rx="1.5"></rect>
+                    <rect x="14" y="3" width="7" height="7" rx="1.5"></rect>
+                    <rect x="14" y="14" width="7" height="7" rx="1.5"></rect>
+                    <rect x="3" y="14" width="7" height="7" rx="1.5"></rect>
+                    <path d="M7 7h.01"></path>
+                    <path d="M17 7h.01"></path>
+                    <path d="M7 17h.01"></path>
+                    <path d="M17 17h.01"></path>
+                  </svg>
+                </button>
+                <button type="button" class="btn-icone btn-icone-whatsapp" onclick="enviarAvisoWhatsAppDespesaExtra('${d.id}', '${p.usuario_id}')" title="Avisar ${escapeHtml(pagadorNome)} no WhatsApp" aria-label="WhatsApp">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
+                  </svg>
+                </button>
+              `;
+            } else {
+              acoesHtml = `
+                <span class="espaco-acao-vazio" aria-hidden="true"></span>
+                <span class="espaco-acao-vazio" aria-hidden="true"></span>
+                <button type="button" class="btn-icone btn-icone-whatsapp" onclick="enviarAvisoWhatsAppDespesaExtra('${d.id}', '${p.usuario_id}')" title="Avisar no WhatsApp" aria-label="WhatsApp">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
+                  </svg>
+                </button>
+              `;
+            }
+          } else if (podeGerenciar) {
+            // Pagador ou admin gerenciando o reembolso de outro morador
+            const iconeToggle = isPago
+              ? `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>`
+              : `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
+
+            acoesHtml = `
+              <span class="espaco-acao-vazio" aria-hidden="true"></span>
+              <button type="button" class="btn-icone ${isPago ? '' : 'btn-icone-pix-pago'}" onclick="alternarStatusCotaDespesaExtra('${d.id}', '${p.usuario_id}', ${isPago})" title="${isPago ? 'Marcar como pendente' : 'Confirmar reembolso recebido'}" aria-label="${isPago ? 'Reverter' : 'Confirmar'}">
+                ${iconeToggle}
+              </button>
+              <button type="button" class="btn-icone btn-icone-whatsapp" onclick="enviarCobrancaWhatsAppDespesaExtra('${d.id}', '${p.usuario_id}')" title="Cobrar ${escapeHtml(nomeMorador)} no WhatsApp" aria-label="WhatsApp">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
+                </svg>
+              </button>
+            `;
+          } else {
+            // Outro morador olhando a cota alheia (ex: Maria olhando a cota do Pedro) -> NÃO VAI PAGAR POR ELE!
+            acoesHtml = `
+              <span class="espaco-acao-vazio" aria-hidden="true"></span>
+              <span class="espaco-acao-vazio" aria-hidden="true"></span>
+              <span class="espaco-acao-vazio" aria-hidden="true"></span>
+            `;
+          }
+
+          return `
+            <div class="linha">
+              <div class="linha-com-avatar">
+                ${gerarAvatarHtml(nomeMorador, p.usuario_id, 32, (mapaCoresParticipantes && mapaCoresParticipantes[p.usuario_id]))}
+                <div>
+                  <strong>${escapeHtml(nomeMorador)}${isEu ? " (você)" : ""}</strong><br/>
+                  <span class="texto-suave">${formatarMoeda(p.valor_cota)}</span>
+                </div>
+              </div>
+              <div style="text-align:right; display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
+                <span class="badge ${badgeClasse}">${badgeTexto}</span>
+                <div class="acoes-cobranca-grid">
+                  ${acoesHtml}
+                </div>
+              </div>
+            </div>
+          `;
+        })
+        .join("");
+
+      const separadorEstilo = indexDespesa > 0
+        ? "padding-top: 14px; margin-top: 14px; border-top: 1px solid var(--cor-borda);"
+        : "";
+
+      return `
+        <div class="item-despesa-extra-bloco" style="${separadorEstilo}">
+          <div class="cabecalho-conta-ciclo" style="border-bottom: 1px solid var(--cor-borda); padding-bottom: 8px; margin-bottom: 4px;">
+            <div class="cabecalho-conta-linha-topo">
+              <h3 class="cabecalho-conta-titulo">
+                <span>${escapeHtml(d.descricao)} — ${formatarMoeda(d.valor)}</span>
+                <span class="badge neutro" style="font-size: 10px; font-weight: 600; padding: 2px 6px; margin-left: 6px;">
+                  ${obterNomeCategoriaExtra(d.categoria)}
+                </span>
+              </h3>
+              ${
+                podeGerenciar
+                  ? `<button type="button" class="btn-icone" style="color: var(--cor-perigo); width: 28px; height: 28px;" title="Excluir despesa" onclick="excluirDespesaExtra('${d.id}')">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                      </svg>
+                    </button>`
+                  : ""
+              }
+            </div>
+            <div class="cabecalho-conta-subtitulo" style="display: flex; justify-content: space-between; width: 100%; flex-wrap: wrap; gap: 6px;">
+              <span>Data: ${dataFormatada} • Pago por <strong>${escapeHtml(pagadorNome)}${ehPagador ? " (você)" : ""}</strong></span>
+              <span style="font-size: 11.5px; font-weight: 600; color: ${todasPagas ? "var(--cor-sucesso-texto, #059669)" : "var(--cor-texto-suave)"};">
+                ${todasPagas ? "✓ Todos acertaram" : (totalReembolsar === 0 ? "Individual" : `${pagosReembolsos} de ${totalReembolsar} reembolsaram`)}
+              </span>
+            </div>
+          </div>
+          <div class="lista-linhas-despesa">
+            ${cotasHtml}
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+
+  container.innerHTML = html;
+}
+
+function enviarCobrancaWhatsAppDespesaExtra(despesaId, usuarioCotaId) {
+  const despesa = (dadosDespesasExtrasCarregadas || []).find((d) => d.id === despesaId);
+  if (!despesa) return;
+
+  const participantes = despesa.despesas_avulsas_participantes || despesa.participantes || [];
+  const cota = participantes.find((p) => p.usuario_id === usuarioCotaId);
+  if (!cota) return;
+
+  const moradorDevedor = (dadosMoradoresCasa || []).find((m) => m.id === usuarioCotaId) || cota.profiles || {};
+  const nomeDevedor = moradorDevedor.nome || "Morador";
+  const pagador = (dadosMoradoresCasa || []).find((m) => m.id === despesa.pago_por_id) || despesa.profiles || {};
+  const pagadorNome = pagador.nome || "Morador";
+  const valorFormatado = formatarMoeda(cota.valor_cota);
+
+  let texto = `*Rachaê - Reembolso de Despesa*\n`;
+  texto += `Olá, *${nomeDevedor}*!\n\n`;
+  texto += `Passando para lembrar da sua parte da compra *${despesa.descricao}* paga por *${pagadorNome}*:\n`;
+  texto += `*Valor do seu reembolso:* *${valorFormatado}*\n\n`;
+
+  if (pagador.chave_pix) {
+    const rotuloPix = typeof window.rotuloTipoPix === "function" ? window.rotuloTipoPix(pagador.tipo_chave_pix) : "Pix";
+    texto += `*Chave Pix para transferir (${rotuloPix}):*\n\`\`\`${pagador.chave_pix}\`\`\`\n\n`;
+  }
+
+  texto += `Assim que fizer o Pix, avise por aqui para confirmarmos no Rachaê. Obrigado!`;
+
+  const tel = moradorDevedor.telefone ? moradorDevedor.telefone.replace(/\D/g, "") : "";
+  const waNum = tel.length === 10 || tel.length === 11 ? "55" + tel : tel;
+
+  const url = waNum
+    ? `https://wa.me/${waNum}?text=${encodeURIComponent(texto)}`
+    : `https://api.whatsapp.com/send?text=${encodeURIComponent(texto)}`;
+
+  window.open(url, "_blank");
+}
+
+function enviarAvisoWhatsAppDespesaExtra(despesaId, usuarioCotaId) {
+  const despesa = (dadosDespesasExtrasCarregadas || []).find((d) => d.id === despesaId);
+  if (!despesa) return;
+
+  const participantes = despesa.despesas_avulsas_participantes || despesa.participantes || [];
+  const cota = participantes.find((p) => p.usuario_id === (usuarioCotaId || usuarioAtualId));
+  if (!cota) return;
+
+  const pagador = (dadosMoradoresCasa || []).find((m) => m.id === despesa.pago_por_id) || despesa.profiles || {};
+  const pagadorNome = pagador.nome || "Morador";
+  const valorFormatado = formatarMoeda(cota.valor_cota);
+
+  let texto = `*Rachaê - Reembolso Realizado*\n`;
+  texto += `Olá, *${pagadorNome}*!\n\n`;
+  texto += `Acabei de fazer a transferência via Pix de *${valorFormatado}* referente à minha parte da compra *${despesa.descricao}*.\n\n`;
+  texto += `Pode confirmar no Rachaê quando cair. Obrigado!`;
+
+  const tel = pagador.telefone ? pagador.telefone.replace(/\D/g, "") : "";
+  const waNum = tel.length === 10 || tel.length === 11 ? "55" + tel : tel;
+
+  const url = waNum
+    ? `https://wa.me/${waNum}?text=${encodeURIComponent(texto)}`
+    : `https://api.whatsapp.com/send?text=${encodeURIComponent(texto)}`;
+
+  window.open(url, "_blank");
+}
+
+async function abrirModalNovaDespesaExtra() {
+  const modal = document.getElementById("modal-despesa-extra");
+  if (!modal) return;
+
+  await carregarMoradoresCasa();
+
+  // Preenche select do pagador
+  const selPagoPor = document.getElementById("extra-pago-por");
+  if (selPagoPor) {
+    selPagoPor.innerHTML = dadosMoradoresCasa
+      .map(
+        (m) =>
+          `<option value="${m.id}" ${m.id === usuarioAtualId ? "selected" : ""}>${escapeHtml(m.nome)}${m.id === usuarioAtualId ? " (Você)" : ""}</option>`
+      )
+      .join("");
+  }
+
+  // Preenche grid de checkboxes de participantes com avatars e check badges
+  const gridParts = document.getElementById("grid-participantes-extra");
+  if (gridParts) {
+    gridParts.innerHTML = dadosMoradoresCasa
+      .map((m) => {
+        const partesNome = (m.nome || "M").trim().split(/\s+/);
+        const iniciais = (partesNome[0][0] + (partesNome.length > 1 ? partesNome[partesNome.length - 1][0] : "")).toUpperCase();
+        return `
+        <label class="label-checkbox-morador selecionado" id="label-morador-${m.id}" title="${escapeHtml(m.nome)}">
+          <input type="checkbox" name="extra_participante" value="${m.id}" checked onchange="atualizarCalculoCotaExtra()" />
+          <div class="morador-avatar-mini">${escapeHtml(iniciais)}</div>
+          <span class="morador-nome-texto">${escapeHtml(m.nome)}</span>
+          <div class="morador-check-badge">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+          </div>
+        </label>
+      `;
+      })
+      .join("");
+  }
+
+  // Data padrão de hoje
+  const inputData = document.getElementById("extra-data");
+  if (inputData) {
+    inputData.value = new Date().toISOString().split("T")[0];
+  }
+
+  // Limpa campos
+  const inputDesc = document.getElementById("extra-descricao");
+  if (inputDesc) inputDesc.value = "";
+  const inputVal = document.getElementById("extra-valor");
+  if (inputVal) {
+    inputVal.value = "";
+    if (!inputVal._cotaListenerAttached) {
+      inputVal._cotaListenerAttached = true;
+      inputVal.addEventListener("input", atualizarCalculoCotaExtra);
+    }
+  }
+
+  atualizarCalculoCotaExtra();
+
+  modal.style.display = "flex";
+  if (window.Animacoes) {
+    window.Animacoes.animarAberturaModal(modal, document.getElementById("card-modal-despesa-extra"));
+  }
+}
+
+function alternarTodosParticipantesExtra() {
+  const checkboxes = Array.from(document.querySelectorAll("input[name='extra_participante']"));
+  if (checkboxes.length === 0) return;
+
+  const todosMarcados = checkboxes.every((cb) => cb.checked);
+  checkboxes.forEach((cb) => {
+    cb.checked = !todosMarcados;
+  });
+  atualizarCalculoCotaExtra();
+}
+
+function atualizarCalculoCotaExtra() {
+  const inputVal = document.getElementById("extra-valor");
+  const labelCota = document.getElementById("label-valor-cota-extra");
+  const subLabel = document.getElementById("cota-preview-participantes");
+  const btnAlternar = document.getElementById("btn-alternar-todos-extra");
+
+  const checkboxes = Array.from(document.querySelectorAll("input[name='extra_participante']"));
+  checkboxes.forEach((cb) => {
+    const parentLabel = document.getElementById(`label-morador-${cb.value}`);
+    if (parentLabel) {
+      if (cb.checked) parentLabel.classList.add("selecionado");
+      else parentLabel.classList.remove("selecionado");
+    }
+  });
+
+  const selecionados = checkboxes.filter((cb) => cb.checked);
+  const total = Number(inputVal?.value || 0);
+
+  if (btnAlternar) {
+    const todosMarcados = checkboxes.length > 0 && selecionados.length === checkboxes.length;
+    btnAlternar.textContent = todosMarcados ? "Desmarcar todos" : "Marcar todos";
+  }
+
+  if (subLabel) {
+    if (selecionados.length === 0) {
+      subLabel.textContent = "Nenhum participante selecionado";
+      subLabel.style.color = "var(--cor-perigo, #ef4444)";
+    } else {
+      subLabel.textContent = `${selecionados.length} de ${checkboxes.length} morador${selecionados.length === 1 ? "" : "es"} dividindo`;
+      subLabel.style.color = "var(--cor-texto-suave)";
+    }
+  }
+
+  if (!labelCota) return;
+
+  if (selecionados.length === 0 || total <= 0) {
+    labelCota.textContent = "R$ 0,00";
+    return;
+  }
+
+  const cotaMedia = total / selecionados.length;
+  labelCota.textContent = `${formatarMoeda(cotaMedia)}`;
+}
+
+function fecharModalDespesaExtra() {
+  const modal = document.getElementById("modal-despesa-extra");
+  const card = document.getElementById("card-modal-despesa-extra");
+  if (!modal) return;
+
+  const fecharImediato = () => {
+    modal.style.setProperty("display", "none", "important");
+    modal.classList.remove("ativo");
+  };
+
+  if (window.Animacoes && typeof window.Animacoes.animarFechamentoModal === "function") {
+    try {
+      window.Animacoes.animarFechamentoModal(modal, card, fecharImediato);
+    } catch (err) {
+      console.warn("Erro ao fechar modal despesa extra:", err);
+      fecharImediato();
+    }
+  } else {
+    fecharImediato();
+  }
+}
+window.fecharModalDespesaExtra = fecharModalDespesaExtra;
+
+function fecharModalDespesaExtraPorOverlay(event) {
+  if (event && event.target && event.target.id === "modal-despesa-extra") {
+    fecharModalDespesaExtra();
+  }
+}
+window.fecharModalDespesaExtraPorOverlay = fecharModalDespesaExtraPorOverlay;
+
+async function salvarDespesaExtra(event) {
+  event.preventDefault();
+  const btnSalvar = document.getElementById("btn-salvar-extra");
+  const descInput = document.getElementById("extra-descricao");
+  const valInput = document.getElementById("extra-valor");
+  const catInput = document.getElementById("extra-categoria");
+  const pagoPorInput = document.getElementById("extra-pago-por");
+  const dataInput = document.getElementById("extra-data");
+
+  const descricao = descInput?.value?.trim();
+  const valor = parseFloat(valInput?.value || "0");
+  const categoria = catInput?.value || "outros";
+  const pagoPorId = pagoPorInput?.value;
+  const dataCompra = dataInput?.value || new Date().toISOString().split("T")[0];
+
+  const checkboxes = Array.from(document.querySelectorAll("input[name='extra_participante']:checked"));
+  const participantes = checkboxes.map((cb) => cb.value);
+
+  if (!descricao) {
+    mostrarToast("Informe a descrição da despesa.", "aviso");
+    return;
+  }
+  if (!valor || valor <= 0) {
+    mostrarToast("Informe um valor válido maior que zero.", "aviso");
+    return;
+  }
+  if (!pagoPorId) {
+    mostrarToast("Selecione quem pagou a compra.", "aviso");
+    return;
+  }
+  if (participantes.length === 0) {
+    mostrarToast("Selecione pelo menos um participante para dividir.", "aviso");
+    return;
+  }
+
+  const textoOriginal = btnSalvar ? btnSalvar.innerHTML : "Salvar Despesa";
+  if (btnSalvar) {
+    btnSalvar.disabled = true;
+    btnSalvar.innerHTML = `
+      <svg class="anim-girar" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <circle cx="12" cy="12" r="10" stroke-dasharray="32" stroke-linecap="round"></circle>
+      </svg>
+      <span>Salvando...</span>
+    `;
+  }
+
+  try {
+    const mesReferencia = primeiroDiaDoMes();
+    const { data, error } = await supabaseClient.rpc("criar_despesa_avulsa", {
+      p_casa_id: casaId,
+      p_descricao: descricao,
+      p_valor: valor,
+      p_categoria: categoria,
+      p_pago_por_id: pagoPorId,
+      p_data: dataCompra,
+      p_mes_referencia: mesReferencia,
+      p_participantes: participantes,
+      p_comprovante_url: null,
+    });
+
+    if (error) throw error;
+
+    mostrarToast("Despesa compartilhada registrada com sucesso!", "sucesso");
+    fecharModalDespesaExtra();
+    await carregarDespesasExtrasDoMes();
+  } catch (err) {
+    console.error("Erro ao salvar despesa compartilhada:", err);
+    mostrarToast(err.message || "Erro ao registrar despesa compartilhada.", "erro");
+  } finally {
+    if (btnSalvar) {
+      btnSalvar.disabled = false;
+      btnSalvar.innerHTML = textoOriginal;
+    }
+  }
+}
+
+async function alternarStatusCotaDespesaExtra(despesaId, usuarioId, statusAtual) {
+  try {
+    if (window.vibrar) window.vibrar(15);
+    const novoStatus = !statusAtual;
+    const { error } = await supabaseClient.rpc("alternar_status_cota_avulsa", {
+      p_despesa_id: despesaId,
+      p_usuario_id: usuarioId,
+      p_pago: novoStatus,
+    });
+
+    if (error) throw error;
+
+    mostrarToast(
+      novoStatus ? "Reembolso confirmado com sucesso!" : "Cota marcada como pendente.",
+      "sucesso"
+    );
+    await carregarDespesasExtrasDoMes();
+  } catch (err) {
+    console.error("Erro ao atualizar status da cota:", err);
+    mostrarToast(err.message || "Não foi possível alterar o status do reembolso.", "erro");
+  }
+}
+
+async function excluirDespesaExtra(despesaId) {
+  const confirmou = await mostrarConfirmacao({
+    titulo: "Excluir Despesa Compartilhada",
+    mensagem: "Tem certeza que deseja excluir esta despesa compartilhada e todas as suas cotas de reembolso?",
+    textoConfirmar: "Excluir Despesa",
+    textoCancelar: "Cancelar",
+    tipo: "perigo",
+  });
+
+  if (!confirmou) {
+    return;
+  }
+
+  try {
+    const { error } = await supabaseClient
+      .from("despesas_avulsas")
+      .delete()
+      .eq("id", despesaId);
+
+    if (error) throw error;
+
+    mostrarToast("Despesa compartilhada excluída com sucesso.", "sucesso");
+    await carregarDespesasExtrasDoMes();
+  } catch (err) {
+    console.error("Erro ao excluir despesa compartilhada:", err);
+    mostrarToast(err.message || "Erro ao excluir despesa.", "erro");
+  }
 }
 
 function copiarPix(codigoEnc) {
   const codigo = decodeURIComponent(codigoEnc);
   navigator.clipboard.writeText(codigo);
+  if (window.vibrar) window.vibrar(20);
   mostrarToast("Código Pix copiado!");
 
   if (window.Animacoes) {
@@ -2240,9 +3520,169 @@ function copiarPix(codigoEnc) {
   }
 }
 
+// Modal Pix para Reembolso de Despesas Compartilhadas / Mercado
+async function abrirModalPixDespesaExtra(despesaId, usuarioCotaId) {
+  const modal = document.getElementById("modal-pix");
+  const conteudo = document.getElementById("conteudo-modal-pix");
+  if (!modal || !conteudo) return;
+
+  const despesa = (dadosDespesasExtrasCarregadas || []).find((d) => d.id === despesaId);
+  if (!despesa) {
+    mostrarToast("Despesa não encontrada.", "aviso");
+    return;
+  }
+
+  const participantes = despesa.despesas_avulsas_participantes || despesa.participantes || [];
+  const cota = participantes.find((p) => p.usuario_id === (usuarioCotaId || usuarioAtualId)) || participantes[0];
+  const valorCota = cota ? Number(cota.valor_cota || 0) : Number(despesa.valor || 0);
+
+  // Busca o morador que pagou a despesa
+  const pagador = (dadosMoradoresCasa || []).find((m) => m.id === despesa.pago_por_id) || despesa.profiles || {};
+  const pagadorNome = pagador.nome || "Morador";
+  const chaveDestino = pagador.chave_pix || null;
+  const tipoChaveDestino = pagador.tipo_chave_pix || "telefone";
+  const nomeBeneficiario = pagador.nome_titular_pix || pagadorNome;
+  const bancoBeneficiario = pagador.banco_pix || null;
+
+  modal.style.display = "flex";
+
+  // Se o recebedor ainda não cadastrou chave Pix
+  if (!chaveDestino) {
+    const telDigitos = pagador.telefone ? pagador.telefone.replace(/\D/g, "") : "";
+    const waNum = telDigitos.length === 10 || telDigitos.length === 11 ? "55" + telDigitos : telDigitos;
+    const waMsg = encodeURIComponent(`Oi ${pagadorNome}! Qual é a sua chave Pix para eu transferir minha parte de ${formatarMoeda(valorCota)} de "${despesa.descricao}"?`);
+    const waLink = waNum ? `https://wa.me/${waNum}?text=${waMsg}` : null;
+
+    conteudo.innerHTML = `
+      <div style="text-align: center; padding: 10px 0;">
+        <div style="width: 48px; height: 48px; border-radius: 50%; background: rgba(245, 158, 11, 0.12); color: var(--cor-aviso); display: inline-flex; align-items: center; justify-content: center; margin-bottom: 12px;">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="8" x2="12" y2="12"></line>
+            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+          </svg>
+        </div>
+        <h3 style="margin: 0 0 6px; font-size: 16px;">Sem Chave Pix Cadastrada</h3>
+        <p class="texto-suave" style="font-size: 13px; margin: 0 0 14px;">
+          <strong>${escapeHtml(pagadorNome)}</strong> ainda não cadastrou a chave Pix no perfil.
+        </p>
+        <div style="background: var(--cor-fundo); border: 1px solid var(--cor-borda); border-radius: 10px; padding: 12px; margin-bottom: 14px; text-align: left;">
+          <div style="font-size: 12px; color: var(--cor-texto-suave);">Despesa compartilhada:</div>
+          <div style="font-size: 14px; font-weight: 700; color: var(--cor-texto); margin: 2px 0 4px;">${escapeHtml(despesa.descricao)}</div>
+          <div style="font-size: 12px; color: var(--cor-texto-suave);">Valor da sua cota: <strong style="color: var(--cor-destaque); font-size: 15px;">${formatarMoeda(valorCota)}</strong></div>
+        </div>
+        ${
+          waLink
+            ? `<a href="${waLink}" target="_blank" rel="noopener noreferrer" class="botao pequeno btn-whatsapp" style="width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none; padding: 10px;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
+                </svg>
+                Pedir chave Pix no WhatsApp
+              </a>`
+            : `<p class="texto-suave" style="font-size: 12px;">Peça para ${escapeHtml(pagadorNome)} abrir o menu <strong>Meu Perfil</strong> no topo e cadastrar a chave Pix dele(a).</p>`
+        }
+      </div>
+    `;
+    return;
+  }
+
+  // Gera código Pix Copia e Cola Oficial (BR Code padrão BACEN / EMV)
+  let payloadPix = "";
+  if (window.gerarPayloadPix) {
+    payloadPix = window.gerarPayloadPix({
+      chave: chaveDestino,
+      tipo: tipoChaveDestino,
+      nome: nomeBeneficiario,
+      cidade: "BRASIL",
+      valor: valorCota,
+      identificador: `EXTRA${despesa.id.replace(/-/g, "").substring(0, 8).toUpperCase()}`,
+    });
+  }
+
+  // Gera imagem de QR Code localmente
+  let qrCodeImg = "";
+  if (payloadPix && typeof window.gerarQRCodeDataURL === "function") {
+    try {
+      qrCodeImg = window.gerarQRCodeDataURL(payloadPix, { tamanho: 240, margem: 4 });
+    } catch (errQr) {
+      console.warn("Aviso ao gerar QR Code localmente:", errQr);
+    }
+  }
+  if (!qrCodeImg && payloadPix) {
+    qrCodeImg = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(payloadPix)}`;
+  }
+
+  let htmlPix = `<div class="qr-box">`;
+
+  if (qrCodeImg) {
+    htmlPix += `
+      <div style="background:#ffffff; padding:10px; border-radius:10px; border:1px solid var(--cor-borda); display:inline-block; margin-bottom:10px;">
+        <img src="${qrCodeImg}" alt="QR Code Pix" style="width:160px; height:160px; display:block;" />
+      </div>
+    `;
+  }
+
+  const rotuloChave = typeof window.rotuloTipoPix === "function" ? window.rotuloTipoPix(tipoChaveDestino) : tipoChaveDestino;
+  const chaveFormatadaExibicao = typeof window.formatarChavePixGenerica === "function" ? window.formatarChavePixGenerica(chaveDestino, tipoChaveDestino) : chaveDestino;
+
+  htmlPix += `
+    <p class="texto-suave" style="margin: 2px 0 2px; font-size: 12.5px;">Reembolso de <strong>${escapeHtml(despesa.descricao)}</strong></p>
+    <p class="texto-suave" style="margin-top:2px; font-size:13px;">Valor da sua parte: <strong style="font-size:18px; color:var(--cor-destaque);">${formatarMoeda(valorCota)}</strong></p>
+    <p class="texto-suave" style="margin:2px 0 12px; font-size:12px;">Para: <strong>${escapeHtml(nomeBeneficiario)}</strong>${bancoBeneficiario ? ` (${escapeHtml(bancoBeneficiario)})` : ""}</p>
+  `;
+
+  if (payloadPix) {
+    htmlPix += `
+      <div style="background:var(--cor-fundo); border:1px solid var(--cor-borda); border-radius:8px; padding:10px; margin-bottom:10px; text-align:left;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+          <span style="font-size:11px; font-weight:700; color:var(--cor-texto-suave); text-transform:uppercase;">Pix Copia e Cola Oficial</span>
+          <span style="font-size:11px; color:var(--cor-destaque); font-weight:600;">Com valor exato</span>
+        </div>
+        <div class="copia-cola" style="max-height:50px; overflow-y:auto; word-break:break-all; font-size:11px;">${payloadPix}</div>
+        <button type="button" class="secundario pequeno" style="width:100%; margin-top:8px !important;" onclick="copiarPix('${encodeURIComponent(payloadPix)}')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle; margin-right:4px;">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+          </svg>
+          Copiar Código Pix
+        </button>
+      </div>
+    `;
+  }
+
+  htmlPix += `
+    <div style="background:var(--cor-fundo); border:1px solid var(--cor-borda); border-radius:8px; padding:10px; margin-bottom:10px; text-align:left;">
+      <span style="font-size:11px; font-weight:700; color:var(--cor-texto-suave); text-transform:uppercase; display:block;">Chave Pix Direta (${escapeHtml(rotuloChave)})</span>
+      <div style="font-size:15px; font-weight:700; color:var(--cor-texto); margin:4px 0 6px;">${escapeHtml(chaveFormatadaExibicao)}</div>
+      <button type="button" class="secundario pequeno" style="width:100%; margin:0 !important;" onclick="copiarPix('${encodeURIComponent(chaveDestino)}')">
+        Copiar Chave Pix (${escapeHtml(rotuloChave)})
+      </button>
+    </div>
+  `;
+
+  // Botão para avisar no WhatsApp após pagar
+  const telDigitos = pagador.telefone ? pagador.telefone.replace(/\D/g, "") : "";
+  const waNum = telDigitos.length === 10 || telDigitos.length === 11 ? "55" + telDigitos : telDigitos;
+  if (waNum) {
+    const waMsg = encodeURIComponent(`Oi ${pagadorNome}! Acabei de fazer o Pix de ${formatarMoeda(valorCota)} referente à minha parte de "${despesa.descricao}" no Rachaê!`);
+    htmlPix += `
+      <a href="https://wa.me/${waNum}?text=${waMsg}" target="_blank" rel="noopener noreferrer" class="botao pequeno btn-whatsapp" style="width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none; padding: 8px 12px; margin-top: 6px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
+        </svg>
+        Avisar ${escapeHtml(pagadorNome)} no WhatsApp
+      </a>
+    `;
+  }
+
+  htmlPix += `</div>`;
+  conteudo.innerHTML = htmlPix;
+}
+
 // Exposição explícita para o escopo global (window)
 window.inicializarDashboard = inicializarDashboard;
 window.filtrarCobrancas = filtrarCobrancas;
+window.abrirModalPixDespesaExtra = abrirModalPixDespesaExtra;
 // ============================================================
 // Anexar comprovante de pagamento (Supabase Storage, bucket privado)
 // ============================================================
@@ -2269,18 +3709,28 @@ async function enviarComprovante(cobrancaId, inputEl) {
     return;
   }
 
-  const { error: erroUpdate } = await supabaseClient
-    .from("cobrancas_individuais")
-    .update({ comprovante_url: caminho })
-    .eq("id", cobrancaId);
+  // Salva no banco via RPC segura com transição para 'em_analise'
+  const { error: errRpc } = await supabaseClient.rpc("enviar_comprovante_cobranca", {
+    p_cobranca_id: cobrancaId,
+    p_caminho: caminho,
+  });
 
-  if (erroUpdate) {
-    mostrarToast("Comprovante enviado, mas houve erro ao salvar: " + erroUpdate.message, "alerta");
-    return;
+  if (errRpc) {
+    // Fallback caso a RPC ainda não esteja instalada no banco
+    const { error: erroUpdate } = await supabaseClient
+      .from("cobrancas_individuais")
+      .update({ comprovante_url: caminho, status: "em_analise" })
+      .eq("id", cobrancaId);
+
+    if (erroUpdate) {
+      mostrarToast("Comprovante enviado, mas houve erro ao salvar: " + erroUpdate.message, "alerta");
+      return;
+    }
   }
 
-  mostrarToast("Comprovante anexado com sucesso!", "sucesso");
+  mostrarToast("Comprovante enviado para análise do administrador!", "sucesso");
   limparCacheDashboard();
+  await carregarCiclosDoMes();
   await abrirModalPix(cobrancaId);
 }
 window.enviarComprovante = enviarComprovante;
@@ -2570,9 +4020,28 @@ window.enviarCobrancaWhatsApp = enviarCobrancaWhatsApp;
 window.exportarRelatorioMes = exportarRelatorioMes;
 window.confirmarPagamentoSimulado = confirmarPagamentoSimulado;
 window.reverterParaPendente = reverterParaPendente;
+window.recusarComprovante = recusarComprovante;
+window.renderizarCategoriasDoMes = renderizarCategoriasDoMes;
 window.ajustarValorCiclo = ajustarValorCiclo;
 window.enviarResumoGrupoWhatsApp = enviarResumoGrupoWhatsApp;
 window.limparCacheDashboard = limparCacheDashboard;
+
+window.carregarMoradoresCasa = carregarMoradoresCasa;
+window.carregarDespesasExtrasDoMes = carregarDespesasExtrasDoMes;
+window.renderizarDespesasExtrasNaTela = renderizarDespesasExtrasNaTela;
+window.abrirModalNovaDespesaExtra = abrirModalNovaDespesaExtra;
+window.alternarTodosParticipantesExtra = alternarTodosParticipantesExtra;
+window.atualizarCalculoCotaExtra = atualizarCalculoCotaExtra;
+window.fecharModalDespesaExtra = fecharModalDespesaExtra;
+window.fecharModalDespesaExtraPorOverlay = fecharModalDespesaExtraPorOverlay;
+window.salvarDespesaExtra = salvarDespesaExtra;
+window.alternarStatusCotaDespesaExtra = alternarStatusCotaDespesaExtra;
+window.excluirDespesaExtra = excluirDespesaExtra;
+window.copiarResumoPendentesGrupo = copiarResumoPendentesGrupo;
+window.enviarCobrancaWhatsAppDespesaExtra = enviarCobrancaWhatsAppDespesaExtra;
+window.enviarAvisoWhatsAppDespesaExtra = enviarAvisoWhatsAppDespesaExtra;
+window.solicitarPermissaoNotificacoes = solicitarPermissaoNotificacoes;
+window.atualizarBotaoNotificacoesUI = atualizarBotaoNotificacoesUI;
 
 // Auto-inicializa se a página for carregada diretamente pelo navegador
 if (!window.InstantNav || !window.InstantNav.emNavegacao) {

@@ -19,15 +19,15 @@
 
   const ROTA_SCRIPT_MAP = {
     "dashboard.html": {
-      script: "js/dashboard.js",
+      scripts: ["js/qrcode.min.js", "js/dashboard.js"],
       init: () => window.inicializarDashboard,
     },
     "contas.html": {
-      script: "js/contas.js",
+      scripts: ["js/contas.js"],
       init: () => window.inicializarContas,
     },
     "convidar.html": {
-      script: "js/convidar.js",
+      scripts: ["js/convidar.js"],
       init: () => window.inicializarConvidar,
     },
   };
@@ -103,12 +103,15 @@
         if (!window.location.pathname.endsWith(rota)) {
           prefetch(rota);
           const config = ROTA_SCRIPT_MAP[rota];
-          if (config && config.script) {
-            const link = document.createElement("link");
-            link.rel = "prefetch";
-            link.as = "script";
-            link.href = config.script;
-            document.head.appendChild(link);
+          if (config) {
+            const scripts = config.scripts || (config.script ? [config.script] : []);
+            scripts.forEach((s) => {
+              const link = document.createElement("link");
+              link.rel = "prefetch";
+              link.as = "script";
+              link.href = s;
+              document.head.appendChild(link);
+            });
           }
         }
       });
@@ -230,8 +233,9 @@
 
     const config = ROTA_SCRIPT_MAP[rotaBase];
     if (config) {
-      if (config.script) {
-        await carregarScript(config.script);
+      const scripts = config.scripts || (config.script ? [config.script] : []);
+      for (const s of scripts) {
+        await carregarScript(s);
       }
       const fn = config.init();
       if (typeof fn === "function") {

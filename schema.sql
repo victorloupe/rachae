@@ -13,6 +13,10 @@ create table if not exists public.profiles (
   telefone text,
   criado_em timestamptz not null default now()
 );
+alter table public.profiles add column if not exists chave_pix text;
+alter table public.profiles add column if not exists tipo_chave_pix text default 'telefone';
+alter table public.profiles add column if not exists nome_titular_pix text;
+alter table public.profiles add column if not exists banco_pix text;
 
 -- Cria o perfil automaticamente quando alguém se cadastra
 create or replace function public.handle_new_user()
@@ -125,7 +129,7 @@ create table if not exists public.cobrancas_individuais (
   pix_qrcode text,
   pix_copia_cola text,
   pix_txid text,
-  status text not null default 'pendente' check (status in ('pendente', 'pago', 'atrasado')),
+  status text not null default 'pendente' check (status in ('pendente', 'em_analise', 'pago', 'atrasado')),
   pago_em timestamptz,
   criado_em timestamptz not null default now()
 );
@@ -291,30 +295,347 @@ create policy "divisao_conta_admin_mod" on public.divisao_conta
   );
 
 drop policy if exists "ciclos_all" on public.ciclos_cobranca;
-create policy "ciclos_all" on public.ciclos_cobranca
-  for all using (
+drop policy if exists "ciclos_select_membros" on public.ciclos_cobranca;
+drop policy if exists "ciclos_admin_mod" on public.ciclos_cobranca;
+create policy "ciclos_select_membros" on public.ciclos_cobranca
+  for select using (
     public.is_member_casa((select casa_id from public.contas_fixas where id = conta_fixa_id))
+  );
+create policy "ciclos_admin_mod" on public.ciclos_cobranca
+  for all using (
+    public.is_admin_casa((select casa_id from public.contas_fixas where id = conta_fixa_id))
   )
   with check (
-    public.is_member_casa((select casa_id from public.contas_fixas where id = conta_fixa_id))
+    public.is_admin_casa((select casa_id from public.contas_fixas where id = conta_fixa_id))
   );
 
 drop policy if exists "cobrancas_all" on public.cobrancas_individuais;
-create policy "cobrancas_all" on public.cobrancas_individuais
-  for all using (
-    public.is_member_casa((
-      select cf.casa_id from public.ciclos_cobranca cc
-      join public.contas_fixas cf on cf.id = cc.conta_fixa_id
-      where cc.id = ciclo_id
-    ))
-  )
-  with check (
+drop policy if exists "cobrancas_select_membros" on public.cobrancas_individuais;
+drop policy if exists "cobrancas_admin_all" on public.cobrancas_individuais;
+drop policy if exists "cobrancas_update_proprio" on public.cobrancas_individuais;
+create policy "cobrancas_select_membros" on public.cobrancas_individuais
+  for select using (
     public.is_member_casa((
       select cf.casa_id from public.ciclos_cobranca cc
       join public.contas_fixas cf on cf.id = cc.conta_fixa_id
       where cc.id = ciclo_id
     ))
   );
+create policy "cobrancas_admin_all" on public.cobrancas_individuais
+  for all using (
+    public.is_admin_casa((
+      select cf.casa_id from public.ciclos_cobranca cc
+      join public.contas_fixas cf on cf.id = cc.conta_fixa_id
+      where cc.id = ciclo_id
+    ))
+  )
+  with check (
+    public.is_admin_casa((
+      select cf.casa_id from public.ciclos_cobranca cc
+      join public.contas_fixas cf on cf.id = cc.conta_fixa_id
+      where cc.id = ciclo_id
+    ))
+  );
+create policy "cobrancas_update_proprio" on public.cobrancas_individuais
+  for update using (
+    usuario_id = auth.uid()
+    and public.is_member_casa((
+      select cf.casa_id from public.ciclos_cobranca cc
+      join public.contas_fixas cf on cf.id = cc.conta_fixa_id
+      where cc.id = ciclo_id
+    ))
+  )
+  with check (
+    usuario_id = auth.uid()
+  );
+
+-- Trigger de proteção para garantir que morador não altere status nem valor
+create or replace function public.proteger_status_cobranca()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  v_casa_id uuid;
+begin
+  -- Se o valor está sendo alterado, apenas admin pode
+  if new.valor is distinct from old.valor then
+    select cf.casa_id into v_casa_id
+    from public.ciclos_cobranca cc
+    join public.contas_fixas cf on cf.id = cc.conta_fixa_id
+    where cc.id = new.ciclo_id;
+
+    if auth.uid() is not null and not public.is_admin_casa(v_casa_id) then
+      raise exception 'Apenas o administrador da casa pode alterar o valor desta cobrança.';
+    end if;
+  end if;
+
+  -- Se o status está sendo alterado
+  if new.status is distinct from old.status then
+    select cf.casa_id into v_casa_id
+    from public.ciclos_cobranca cc
+    join public.contas_fixas cf on cf.id = cc.conta_fixa_id
+    where cc.id = new.ciclo_id;
+
+    -- Permite que o próprio morador mude de 'pendente' ou 'atrasado' para 'em_analise' se anexar comprovante
+    if (old.status in ('pendente', 'atrasado')) and new.status = 'em_analise' and (new.comprovante_url is not null) then
+      if auth.uid() is not null and new.usuario_id <> auth.uid() and not public.is_admin_casa(v_casa_id) then
+        raise exception 'Você só pode enviar comprovante para sua própria cobrança.';
+      end if;
+    else
+      -- Qualquer outra transição de status exige ser admin da casa
+      if auth.uid() is not null and not public.is_admin_casa(v_casa_id) then
+        raise exception 'Apenas o administrador da casa pode aprovar pagamentos ou alterar status desta cobrança.';
+      end if;
+    end if;
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_proteger_status_cobranca on public.cobrancas_individuais;
+create trigger trg_proteger_status_cobranca
+  before update on public.cobrancas_individuais
+  for each row
+  execute function public.proteger_status_cobranca();
+
+-- Funções RPC para administração segura de pagamentos
+create or replace function public.confirmar_pagamento_cobranca(p_cobranca_id uuid)
+returns boolean
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  v_casa_id uuid;
+begin
+  select cf.casa_id into v_casa_id
+  from public.cobrancas_individuais ci
+  join public.ciclos_cobranca cc on cc.id = ci.ciclo_id
+  join public.contas_fixas cf on cf.id = cc.conta_fixa_id
+  where ci.id = p_cobranca_id;
+
+  if v_casa_id is null or not public.is_admin_casa(v_casa_id) then
+    raise exception 'Apenas o administrador pode confirmar o pagamento.';
+  end if;
+
+  update public.cobrancas_individuais
+  set status = 'pago', pago_em = now()
+  where id = p_cobranca_id;
+
+  return true;
+end;
+$$;
+grant execute on function public.confirmar_pagamento_cobranca(uuid) to authenticated;
+
+create or replace function public.reverter_pagamento_cobranca(p_cobranca_id uuid)
+returns boolean
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  v_casa_id uuid;
+begin
+  select cf.casa_id into v_casa_id
+  from public.cobrancas_individuais ci
+  join public.ciclos_cobranca cc on cc.id = ci.ciclo_id
+  join public.contas_fixas cf on cf.id = cc.conta_fixa_id
+  where ci.id = p_cobranca_id;
+
+  if v_casa_id is null or not public.is_admin_casa(v_casa_id) then
+    raise exception 'Apenas o administrador pode reverter o status.';
+  end if;
+
+  update public.cobrancas_individuais
+  set status = 'pendente', pago_em = null
+  where id = p_cobranca_id;
+
+  return true;
+end;
+$$;
+grant execute on function public.reverter_pagamento_cobranca(uuid) to authenticated;
+
+-- RPC: Enviar comprovante com transição para em_analise
+create or replace function public.enviar_comprovante_cobranca(p_cobranca_id uuid, p_caminho text)
+returns boolean
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  v_casa_id uuid;
+  v_usuario_id uuid;
+begin
+  select cf.casa_id, ci.usuario_id into v_casa_id, v_usuario_id
+  from public.cobrancas_individuais ci
+  join public.ciclos_cobranca cc on cc.id = ci.ciclo_id
+  join public.contas_fixas cf on cf.id = cc.conta_fixa_id
+  where ci.id = p_cobranca_id;
+
+  if v_casa_id is null then
+    raise exception 'Cobrança não encontrada.';
+  end if;
+
+  if auth.uid() is not null and auth.uid() <> v_usuario_id and not public.is_admin_casa(v_casa_id) then
+    raise exception 'Apenas o titular desta cobrança ou o administrador pode anexar comprovante.';
+  end if;
+
+  update public.cobrancas_individuais
+  set comprovante_url = p_caminho,
+      status = 'em_analise'
+  where id = p_cobranca_id;
+
+  return true;
+end;
+$$;
+grant execute on function public.enviar_comprovante_cobranca(uuid, text) to authenticated;
+
+-- RPC: Recusar comprovante
+create or replace function public.recusar_comprovante_cobranca(p_cobranca_id uuid)
+returns boolean
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  v_casa_id uuid;
+begin
+  select cf.casa_id into v_casa_id
+  from public.cobrancas_individuais ci
+  join public.ciclos_cobranca cc on cc.id = ci.ciclo_id
+  join public.contas_fixas cf on cf.id = cc.conta_fixa_id
+  where ci.id = p_cobranca_id;
+
+  if v_casa_id is null or not public.is_admin_casa(v_casa_id) then
+    raise exception 'Apenas o administrador da casa pode recusar comprovantes.';
+  end if;
+
+  update public.cobrancas_individuais
+  set status = 'pendente',
+      comprovante_url = null
+  where id = p_cobranca_id;
+
+  return true;
+end;
+$$;
+grant execute on function public.recusar_comprovante_cobranca(uuid) to authenticated;
+
+-- RPC: Sincronização atômica de ciclos e cobranças do mês
+create or replace function public.sincronizar_cobrancas_mes(p_casa_id uuid, p_mes date)
+returns boolean
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  r_conta record;
+  r_ciclo record;
+  v_mes_str text;
+  v_membros uuid[];
+  v_num_membros int;
+  v_total_centavos bigint;
+  v_centavos_base bigint;
+  v_sobra_centavos bigint;
+  v_centavos_pessoa bigint;
+  v_idx int;
+  v_membro_id uuid;
+  v_ano_ini int;
+  v_mes_ini int;
+  v_ano_ref int;
+  v_mes_ref int;
+  v_diff_meses int;
+  v_parcela_atual int;
+  r_div record;
+  v_soma_percentual numeric;
+begin
+  if not public.is_member_casa(p_casa_id) then
+    raise exception 'Acesso negado para esta casa.';
+  end if;
+
+  v_mes_str := to_char(p_mes, 'YYYY-MM');
+
+  for r_conta in
+    select * from public.contas_fixas
+    where casa_id = p_casa_id
+      and ativa = true
+      and (mes_inicio is null or v_mes_str >= mes_inicio)
+  loop
+    if r_conta.parcelado and r_conta.parcelas_total is not null and r_conta.mes_inicio is not null then
+      v_ano_ini := split_part(r_conta.mes_inicio, '-', 1)::int;
+      v_mes_ini := split_part(r_conta.mes_inicio, '-', 2)::int;
+      v_ano_ref := split_part(v_mes_str, '-', 1)::int;
+      v_mes_ref := split_part(v_mes_str, '-', 2)::int;
+      v_diff_meses := (v_ano_ref - v_ano_ini) * 12 + (v_mes_ref - v_mes_ini);
+      v_parcela_atual := v_diff_meses + 1;
+
+      if v_parcela_atual < 1 or v_parcela_atual > r_conta.parcelas_total then
+        continue;
+      end if;
+    end if;
+
+    select * into r_ciclo
+    from public.ciclos_cobranca
+    where conta_fixa_id = r_conta.id and mes_referencia = p_mes;
+
+    if r_ciclo.id is null then
+      insert into public.ciclos_cobranca (conta_fixa_id, mes_referencia, valor_total)
+      values (r_conta.id, p_mes, r_conta.valor_padrao)
+      returning * into r_ciclo;
+    end if;
+
+    if not exists (select 1 from public.cobrancas_individuais where ciclo_id = r_ciclo.id) then
+      if r_conta.forma_divisao = 'individual' and r_conta.morador_especifico_id is not null then
+        insert into public.cobrancas_individuais (ciclo_id, usuario_id, valor, status)
+        values (r_ciclo.id, r_conta.morador_especifico_id, r_ciclo.valor_total, 'pendente')
+        on conflict do nothing;
+      elsif r_conta.forma_divisao = 'percentual' then
+        select coalesce(sum(peso_ou_valor), 0) into v_soma_percentual
+        from public.divisao_conta
+        where conta_fixa_id = r_conta.id;
+
+        if v_soma_percentual > 0 then
+          for r_div in
+            select usuario_id, peso_ou_valor
+            from public.divisao_conta
+            where conta_fixa_id = r_conta.id and peso_ou_valor > 0
+          loop
+            insert into public.cobrancas_individuais (ciclo_id, usuario_id, valor, status)
+            values (
+              r_ciclo.id,
+              r_div.usuario_id,
+              round((r_ciclo.valor_total * (r_div.peso_ou_valor / v_soma_percentual)), 2),
+              'pendente'
+            )
+            on conflict do nothing;
+          end loop;
+        end if;
+      else
+        select array_agg(usuario_id order by entrou_em asc, usuario_id asc) into v_membros
+        from public.membros_casa
+        where casa_id = p_casa_id
+          and (entrou_em is null or entrou_em <= (r_ciclo.criado_em + interval '1 day'));
+
+        v_num_membros := coalesce(array_length(v_membros, 1), 0);
+
+        if v_num_membros > 0 then
+          v_total_centavos := round(r_ciclo.valor_total * 100)::bigint;
+          v_centavos_base := v_total_centavos / v_num_membros;
+          v_sobra_centavos := v_total_centavos - (v_centavos_base * v_num_membros);
+
+          for v_idx in 1..v_num_membros loop
+            v_membro_id := v_membros[v_idx];
+            v_centavos_pessoa := v_centavos_base + (case when v_idx <= v_sobra_centavos then 1 else 0 end);
+
+            insert into public.cobrancas_individuais (ciclo_id, usuario_id, valor, status)
+            values (r_ciclo.id, v_membro_id, (v_centavos_pessoa::numeric / 100), 'pendente')
+            on conflict do nothing;
+          end loop;
+        end if;
+      end if;
+    end if;
+  end loop;
+
+  return true;
+end;
+$$;
+grant execute on function public.sincronizar_cobrancas_mes(uuid, date) to authenticated;
 
 -- ============================================================
 -- CONVITES: consulta segura por código + aceite atômico
@@ -488,6 +809,190 @@ create policy "comprovantes_update_membro_casa" on storage.objects
     bucket_id = 'comprovantes'
     and public.is_member_casa((storage.foldername(name))[1]::uuid)
   );
+
+-- ============================================================
+-- FASE 3: DESPESAS AVULSAS / EXTRAS / MERCADO
+-- ============================================================
+create table if not exists public.despesas_avulsas (
+  id uuid primary key default gen_random_uuid(),
+  casa_id uuid not null references public.casas(id) on delete cascade,
+  descricao text not null,
+  valor numeric(10,2) not null check (valor > 0),
+  categoria text not null default 'alimentacao',
+  pago_por_id uuid not null references public.profiles(id) on delete cascade,
+  data date not null default current_date,
+  mes_referencia date not null,
+  comprovante_url text,
+  criado_em timestamptz not null default now()
+);
+
+create index if not exists idx_despesas_avulsas_casa_mes 
+  on public.despesas_avulsas (casa_id, mes_referencia);
+
+create table if not exists public.despesas_avulsas_participantes (
+  despesa_id uuid not null references public.despesas_avulsas(id) on delete cascade,
+  usuario_id uuid not null references public.profiles(id) on delete cascade,
+  valor_cota numeric(10,2) not null check (valor_cota >= 0),
+  pago boolean not null default false,
+  pago_em timestamptz,
+  primary key (despesa_id, usuario_id)
+);
+
+create index if not exists idx_despesas_avulsas_part_usuario 
+  on public.despesas_avulsas_participantes (usuario_id);
+
+alter table public.despesas_avulsas enable row level security;
+alter table public.despesas_avulsas_participantes enable row level security;
+
+drop policy if exists "despesas_avulsas_select" on public.despesas_avulsas;
+create policy "despesas_avulsas_select" on public.despesas_avulsas
+  for select using (public.is_member_casa(casa_id));
+
+drop policy if exists "despesas_avulsas_insert" on public.despesas_avulsas;
+create policy "despesas_avulsas_insert" on public.despesas_avulsas
+  for insert with check (public.is_member_casa(casa_id) and auth.uid() is not null);
+
+drop policy if exists "despesas_avulsas_update" on public.despesas_avulsas;
+create policy "despesas_avulsas_update" on public.despesas_avulsas
+  for update using (public.is_admin_casa(casa_id) or pago_por_id = auth.uid());
+
+drop policy if exists "despesas_avulsas_delete" on public.despesas_avulsas;
+create policy "despesas_avulsas_delete" on public.despesas_avulsas
+  for delete using (public.is_admin_casa(casa_id) or pago_por_id = auth.uid());
+
+drop policy if exists "despesas_part_select" on public.despesas_avulsas_participantes;
+create policy "despesas_part_select" on public.despesas_avulsas_participantes
+  for select using (
+    public.is_member_casa((select casa_id from public.despesas_avulsas where id = despesa_id))
+  );
+
+drop policy if exists "despesas_part_insert" on public.despesas_avulsas_participantes;
+create policy "despesas_part_insert" on public.despesas_avulsas_participantes
+  for insert with check (
+    public.is_member_casa((select casa_id from public.despesas_avulsas where id = despesa_id))
+  );
+
+drop policy if exists "despesas_part_update" on public.despesas_avulsas_participantes;
+create policy "despesas_part_update" on public.despesas_avulsas_participantes
+  for update using (
+    public.is_admin_casa((select casa_id from public.despesas_avulsas where id = despesa_id))
+    or usuario_id = auth.uid()
+    or (select pago_por_id from public.despesas_avulsas where id = despesa_id) = auth.uid()
+  );
+
+drop policy if exists "despesas_part_delete" on public.despesas_avulsas_participantes;
+create policy "despesas_part_delete" on public.despesas_avulsas_participantes
+  for delete using (
+    public.is_admin_casa((select casa_id from public.despesas_avulsas where id = despesa_id))
+    or (select pago_por_id from public.despesas_avulsas where id = despesa_id) = auth.uid()
+  );
+
+-- RPC: Criar despesa avulsa com participantes de forma atômica
+create or replace function public.criar_despesa_avulsa(
+  p_casa_id uuid,
+  p_descricao text,
+  p_valor numeric,
+  p_categoria text,
+  p_pago_por_id uuid,
+  p_data date,
+  p_mes_referencia date,
+  p_participantes uuid[],
+  p_comprovante_url text default null
+)
+returns uuid
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  v_despesa_id uuid;
+  v_num_parts int;
+  v_total_centavos bigint;
+  v_centavos_base bigint;
+  v_sobra_centavos bigint;
+  v_centavos_part bigint;
+  v_idx int;
+  v_usuario_id uuid;
+  v_eh_pagador boolean;
+begin
+  if not public.is_member_casa(p_casa_id) then
+    raise exception 'Acesso não autorizado para esta casa.';
+  end if;
+
+  if p_valor <= 0 then
+    raise exception 'O valor da despesa deve ser maior que zero.';
+  end if;
+
+  v_num_parts := coalesce(array_length(p_participantes, 1), 0);
+  if v_num_parts = 0 then
+    raise exception 'Pelo menos um participante deve ser selecionado para a divisão.';
+  end if;
+
+  insert into public.despesas_avulsas (
+    casa_id, descricao, valor, categoria, pago_por_id, data, mes_referencia, comprovante_url
+  ) values (
+    p_casa_id, trim(p_descricao), p_valor, coalesce(p_categoria, 'outros'),
+    p_pago_por_id, coalesce(p_data, current_date), p_mes_referencia, p_comprovante_url
+  ) returning id into v_despesa_id;
+
+  v_total_centavos := round(p_valor * 100)::bigint;
+  v_centavos_base := v_total_centavos / v_num_parts;
+  v_sobra_centavos := v_total_centavos - (v_centavos_base * v_num_parts);
+
+  for v_idx in 1..v_num_parts loop
+    v_usuario_id := p_participantes[v_idx];
+    v_centavos_part := v_centavos_base + (case when v_idx <= v_sobra_centavos then 1 else 0 end);
+    v_eh_pagador := (v_usuario_id = p_pago_por_id);
+
+    insert into public.despesas_avulsas_participantes (
+      despesa_id, usuario_id, valor_cota, pago, pago_em
+    ) values (
+      v_despesa_id,
+      v_usuario_id,
+      (v_centavos_part::numeric / 100),
+      v_eh_pagador,
+      case when v_eh_pagador then now() else null end
+    );
+  end loop;
+
+  return v_despesa_id;
+end;
+$$;
+grant execute on function public.criar_despesa_avulsa(uuid, text, numeric, text, uuid, date, date, uuid[], text) to authenticated;
+
+create or replace function public.alternar_status_cota_avulsa(
+  p_despesa_id uuid,
+  p_usuario_id uuid,
+  p_pago boolean
+)
+returns boolean
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  v_casa_id uuid;
+  v_pago_por_id uuid;
+begin
+  select da.casa_id, da.pago_por_id into v_casa_id, v_pago_por_id
+  from public.despesas_avulsas da
+  where da.id = p_despesa_id;
+
+  if v_casa_id is null then
+    raise exception 'Despesa não encontrada.';
+  end if;
+
+  if not (public.is_admin_casa(v_casa_id) or v_pago_por_id = auth.uid()) then
+    raise exception 'Apenas quem pagou a compra ou o administrador pode confirmar o acerto desta cota.';
+  end if;
+
+  update public.despesas_avulsas_participantes
+  set pago = p_pago,
+      pago_em = case when p_pago then now() else null end
+  where despesa_id = p_despesa_id and usuario_id = p_usuario_id;
+
+  return true;
+end;
+$$;
+grant execute on function public.alternar_status_cota_avulsa(uuid, uuid, boolean) to authenticated;
 
 -- ============================================================
 -- Fim do schema.

@@ -67,12 +67,23 @@ async function exigirLogin() {
   return session;
 }
 
+// Feedback tátil háptico nativo para ações no mobile (Nubank/Inter feel)
+function vibrar(padrao = 15) {
+  if (typeof navigator !== "undefined" && "vibrate" in navigator && typeof navigator.vibrate === "function") {
+    try {
+      navigator.vibrate(padrao);
+    } catch (e) {}
+  }
+}
+window.vibrar = vibrar;
+
 async function logout() {
   await supabaseClient.auth.signOut();
   localStorage.removeItem("casa_atual");
   localStorage.removeItem("casa_nome");
   localStorage.removeItem("casa_numero");
   localStorage.removeItem("casa_papel");
+  sessionStorage.clear();
   window.location.href = "index.html";
 }
 
@@ -209,17 +220,25 @@ async function inicializarPerfilUsuario(user) {
 
   let nome = "";
   let telefone = "";
+  let chavePix = "";
+  let tipoChavePix = "telefone";
+  let nomeTitularPix = "";
+  let bancoPix = "";
 
   try {
     const { data: perfil } = await supabaseClient
       .from("profiles")
-      .select("nome, telefone")
+      .select("nome, telefone, chave_pix, tipo_chave_pix, nome_titular_pix, banco_pix")
       .eq("id", user.id)
       .maybeSingle();
 
-    if (perfil && perfil.nome) {
-      nome = perfil.nome;
-      telefone = perfil.telefone || "";
+    if (perfil) {
+      if (perfil.nome) nome = perfil.nome;
+      if (perfil.telefone) telefone = perfil.telefone || "";
+      chavePix = perfil.chave_pix || "";
+      tipoChavePix = perfil.tipo_chave_pix || "telefone";
+      nomeTitularPix = perfil.nome_titular_pix || "";
+      bancoPix = perfil.banco_pix || "";
     }
   } catch (e) {
     console.warn("Erro ao buscar perfil do usuário:", e);
@@ -235,6 +254,10 @@ async function inicializarPerfilUsuario(user) {
     email: user.email || "",
     nome: nome,
     telefone: telefone,
+    chave_pix: chavePix,
+    tipo_chave_pix: tipoChavePix,
+    nome_titular_pix: nomeTitularPix,
+    banco_pix: bancoPix,
   };
   window.perfilUsuarioAtual = perfilUsuarioAtual;
 
@@ -293,7 +316,9 @@ function atualizarHeaderUsuarioUI(perfil) {
 
 function garantirModalPerfil() {
   let modal = document.getElementById("modal-perfil-usuario");
-  if (modal) return modal;
+  if (modal) {
+    modal.remove();
+  }
 
   modal = document.createElement("div");
   modal.id = "modal-perfil-usuario";
@@ -302,131 +327,337 @@ function garantirModalPerfil() {
 
   modal.innerHTML = `
     <div class="modal-card-sistema modal-card-perfil" role="dialog" aria-modal="true" aria-labelledby="modal-perfil-titulo">
-      <div class="modal-perfil-header">
-        <div>
-          <h3 id="modal-perfil-titulo" style="margin: 0; font-size: 18px; font-weight: 700; text-align: left;">Meu Perfil</h3>
-          <p style="margin: 2px 0 0; font-size: 13px; color: var(--cor-texto-suave); text-align: left;">Gerencie seus dados de acesso e morador</p>
+      <!-- HEADER FIXO -->
+      <div class="modal-perfil-header-fixo">
+        <div class="modal-perfil-header-topo">
+          <div class="modal-perfil-header-titulos">
+            <span class="modal-perfil-badge-topo">Configurações da Conta</span>
+            <h3 id="modal-perfil-titulo">Meu Perfil</h3>
+          </div>
+          <button type="button" class="btn-fechar-modal-x" onclick="fecharModalPerfil()" aria-label="Fechar modal" title="Fechar">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
         </div>
-        <button type="button" class="btn-fechar-modal-x" onclick="fecharModalPerfil()" aria-label="Fechar modal" title="Fechar">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="18" y1="6" x2="6" y2="18"></line>
-            <line x1="6" y1="6" x2="18" y2="18"></line>
-          </svg>
-        </button>
-      </div>
 
-      <div class="perfil-avatar-secao">
-        <div class="perfil-avatar-circulo" id="modal-perfil-avatar-preview">U</div>
-        <div class="perfil-avatar-info">
-          <span class="perfil-avatar-nome" id="modal-perfil-preview-nome">Usuário</span>
-          <span class="perfil-avatar-email" id="modal-perfil-preview-email">email@exemplo.com</span>
+        <div class="perfil-avatar-secao">
+          <div class="perfil-avatar-circulo" id="modal-perfil-avatar-preview">U</div>
+          <div class="perfil-avatar-info">
+            <span class="perfil-avatar-nome" id="modal-perfil-preview-nome">Usuário</span>
+            <span class="perfil-avatar-email" id="modal-perfil-preview-email">email@exemplo.com</span>
+          </div>
+          <div class="perfil-avatar-badge-status">
+            <span class="perfil-status-dot"></span>
+            <span>Ativo</span>
+          </div>
         </div>
-      </div>
 
-      <form id="form-editar-perfil" onsubmit="salvarPerfilUsuario(event)">
-        <div class="campo-grupo">
-          <label for="input-perfil-nome" class="campo-label">
-            <span>Nome Completo <span class="campo-obrigatorio">*</span></span>
-          </label>
-          <div class="input-com-icone">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
+        <!-- ABAS SEGMENTADAS: OS 3 NA MESMA LINHA -->
+        <div class="perfil-tabs-nav" role="tablist">
+          <button type="button" class="perfil-tab-btn ativo" id="tab-btn-dados" onclick="alternarAbaPerfil('dados')" role="tab" aria-selected="true">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
               <circle cx="12" cy="7" r="4"></circle>
             </svg>
-            <input type="text" id="input-perfil-nome" required placeholder="Como você quer ser chamado" autocomplete="name" />
-          </div>
-        </div>
-
-        <div class="campo-grupo">
-          <label for="input-perfil-telefone" class="campo-label">
-            <span>WhatsApp / Telefone</span>
-          </label>
-          <div class="input-com-icone">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+            <span>Dados</span>
+          </button>
+          <button type="button" class="perfil-tab-btn" id="tab-btn-pix" onclick="alternarAbaPerfil('pix')" role="tab" aria-selected="false">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;">
+              <rect x="3" y="5" width="18" height="14" rx="2"></rect>
+              <circle cx="12" cy="12" r="2.5"></circle>
+              <path d="M7 15h.01M17 9h.01"></path>
             </svg>
-            <input type="tel" id="input-perfil-telefone" placeholder="(00) 00000-0000" autocomplete="tel" />
-          </div>
-          <span class="campo-dica">Usado para identificação de comprovantes e transferências Pix.</span>
-        </div>
-
-        <div class="campo-grupo">
-          <label for="input-perfil-email" class="campo-label">
-            <span>E-mail de Acesso</span>
-            <span class="badge-imutavel">Não editável</span>
-          </label>
-          <div class="input-com-icone input-bloqueado">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
-              <polyline points="22,6 12,13 2,6"></polyline>
+            <span>Chave Pix</span>
+          </button>
+          <button type="button" class="perfil-tab-btn" id="tab-btn-ajustes" onclick="alternarAbaPerfil('ajustes')" role="tab" aria-selected="false">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
             </svg>
-            <input type="email" id="input-perfil-email" readonly disabled />
+            <span>Ajustes</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- FORM COM CORPO SCROLLÁVEL E FOOTER FIXO -->
+      <form id="form-editar-perfil" onsubmit="salvarPerfilUsuario(event)" class="modal-perfil-form">
+        <!-- CORPO INTERNO COM ROLAGEM SLIM -->
+        <div class="modal-perfil-corpo-scroll">
+          
+          <!-- ABA 1: DADOS -->
+          <div id="aba-painel-dados" class="perfil-tab-painel ativo">
+            <div class="campo-grupo">
+              <label for="input-perfil-nome" class="campo-label">
+                <span>Nome Completo <span class="campo-obrigatorio">*</span></span>
+              </label>
+              <div class="input-com-icone">
+                <span class="campo-icone-prefix">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="12" cy="7" r="4"></circle>
+                  </svg>
+                </span>
+                <input type="text" id="input-perfil-nome" required placeholder="Como você quer ser chamado" autocomplete="name" />
+              </div>
+            </div>
+
+            <div class="campo-grupo">
+              <label for="input-perfil-telefone" class="campo-label">
+                <span>WhatsApp / Telefone</span>
+              </label>
+              <div class="input-com-icone">
+                <span class="campo-icone-prefix">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                  </svg>
+                </span>
+                <input type="tel" id="input-perfil-telefone" placeholder="(00) 00000-0000" autocomplete="tel" />
+              </div>
+              <span class="campo-dica">Utilizado para identificação e avisos de comprovantes.</span>
+            </div>
+
+            <div class="campo-grupo">
+              <div class="campo-label-linha">
+                <label for="input-perfil-email" class="campo-label">E-mail de Acesso</label>
+                <span class="badge-imutavel">Não editável</span>
+              </div>
+              <div class="input-com-icone input-bloqueado">
+                <span class="campo-icone-prefix">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                    <polyline points="22,6 12,13 2,6"></polyline>
+                  </svg>
+                </span>
+                <input type="email" id="input-perfil-email" readonly disabled />
+              </div>
+            </div>
+
+            <!-- ACORDEÃO ALTERAR SENHA -->
+            <div class="secao-alterar-senha">
+              <button type="button" class="btn-toggle-senha-accordion" onclick="alternarSecaoSenha()">
+                <div class="btn-toggle-senha-esq">
+                  <span class="btn-toggle-senha-icone">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                      <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                    </svg>
+                  </span>
+                  <span>Alterar senha de acesso</span>
+                </div>
+                <svg id="icone-seta-senha" class="icone-chevron-senha" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </button>
+
+              <div id="container-campos-senha" class="container-campos-senha-expandido" style="display: none;">
+                <div class="campo-grupo" style="margin-bottom: 10px;">
+                  <label for="input-perfil-nova-senha" class="campo-label">Nova Senha</label>
+                  <div class="input-com-icone input-com-olho">
+                    <span class="campo-icone-prefix">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                      </svg>
+                    </span>
+                    <input type="password" id="input-perfil-nova-senha" placeholder="Mínimo 6 caracteres" autocomplete="new-password" />
+                    <button type="button" class="btn-olho-senha" onclick="alternarVisibilidadeSenhaPerfil('input-perfil-nova-senha', this)" title="Ver senha">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                        <circle cx="12" cy="12" r="3"></circle>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                <div class="campo-grupo" style="margin-bottom: 0;">
+                  <label for="input-perfil-confirma-senha" class="campo-label">Confirmar Nova Senha</label>
+                  <div class="input-com-icone input-com-olho">
+                    <span class="campo-icone-prefix">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                      </svg>
+                    </span>
+                    <input type="password" id="input-perfil-confirma-senha" placeholder="Repita a nova senha" autocomplete="new-password" />
+                    <button type="button" class="btn-olho-senha" onclick="alternarVisibilidadeSenhaPerfil('input-perfil-confirma-senha', this)" title="Ver senha">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                        <circle cx="12" cy="12" r="3"></circle>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
+
+          <!-- ABA 2: CHAVE PIX -->
+          <div id="aba-painel-pix" class="perfil-tab-painel" style="display: none;">
+            <div class="perfil-pix-info-card">
+              <div class="perfil-pix-info-icone">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="5" width="18" height="14" rx="2"></rect>
+                  <circle cx="12" cy="12" r="2.5"></circle>
+                  <path d="M7 15h.01M17 9h.01"></path>
+                </svg>
+              </div>
+              <div>
+                <div style="font-weight: 700; font-size: 13.5px; color: var(--cor-texto);">Sua Chave Pix para Reembolsos</div>
+                <div style="font-size: 11.5px; color: var(--cor-texto-suave); line-height: 1.35; margin-top: 2px;">
+                  Os outros moradores verão esta chave quando você registrar uma compra compartilhada.
+                </div>
+              </div>
+            </div>
+
+            <div class="campo-grupo">
+              <label for="input-perfil-pix-tipo" class="campo-label">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline; vertical-align:-1px; margin-right:4px;">
+                  <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
+                  <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+                </svg>
+                Tipo de Chave Pix
+              </label>
+              <select id="input-perfil-pix-tipo" class="campo-select" onchange="atualizarPlaceholderPixPerfil()">
+                <option value="telefone">Celular</option>
+                <option value="cpf">CPF</option>
+                <option value="cnpj">CNPJ</option>
+                <option value="email">E-mail</option>
+                <option value="aleatoria">Chave Aleatória (EVP)</option>
+              </select>
+            </div>
+
+            <div class="campo-grupo">
+              <label for="input-perfil-pix-chave" class="campo-label">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline; vertical-align:-1px; margin-right:4px;">
+                  <path d="M21 2l-2 2m-6 6l7-7-3-3-7 7v3h3z"></path>
+                  <circle cx="7.5" cy="15.5" r="5.5"></circle>
+                </svg>
+                Chave Pix
+              </label>
+              <input type="text" id="input-perfil-pix-chave" placeholder="(00) 00000-0000" />
+              <span id="hint-perfil-pix" class="campo-dica" style="margin-top: 3px; font-size: 11px;"></span>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+              <div class="campo-grupo" style="margin-bottom: 0;">
+                <label for="input-perfil-pix-titular" class="campo-label">
+                  <span>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline; vertical-align:-1px; margin-right:3px;">
+                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                      <circle cx="12" cy="7" r="4"></circle>
+                    </svg>
+                    Titular
+                  </span>
+                  <span class="badge-imutavel" style="font-size: 9px; padding: 1px 4px;">Opcional</span>
+                </label>
+                <input type="text" id="input-perfil-pix-titular" placeholder="Nome no banco" />
+              </div>
+              <div class="campo-grupo" style="margin-bottom: 0;">
+                <label for="input-perfil-pix-banco" class="campo-label">
+                  <span>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline; vertical-align:-1px; margin-right:3px;">
+                      <line x1="3" y1="21" x2="21" y2="21"></line>
+                      <line x1="3" y1="10" x2="21" y2="10"></line>
+                      <polyline points="5 10 5 21"></polyline>
+                      <polyline points="19 10 19 21"></polyline>
+                      <polygon points="12 2 20 7 4 7 12 2"></polygon>
+                    </svg>
+                    Banco
+                  </span>
+                  <span class="badge-imutavel" style="font-size: 9px; padding: 1px 4px;">Opcional</span>
+                </label>
+                <input type="text" id="input-perfil-pix-banco" placeholder="Ex: Nubank, Inter" />
+              </div>
+            </div>
+
+            <!-- LIVE PREVIEW CARD -->
+            <div class="pix-preview-card" style="margin-top: 14px;">
+              <div class="pix-preview-badge">Pré-visualização do seu Pix</div>
+              <div class="pix-preview-conteudo">
+                <div class="pix-preview-icone-box">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2L2 12l10 10 10-10L12 2zm0 3.5L18.5 12 12 18.5 5.5 12 12 5.5z"/>
+                  </svg>
+                </div>
+                <div class="pix-preview-linhas">
+                  <div class="pix-preview-chave-texto" id="pix-preview-chave-val">Nenhuma chave cadastrada</div>
+                  <div class="pix-preview-meta" id="pix-preview-meta-val">Celular • Titular: Morador</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ABA 3: AJUSTES -->
+          <div id="aba-painel-ajustes" class="perfil-tab-painel" style="display: none;">
+            <div class="seletor-tema-container" style="margin-top: 0;">
+              <span class="seletor-tema-titulo">Tema da Interface</span>
+              <div class="seletor-tema-opcoes">
+                <button type="button" class="btn-opcao-tema" id="btn-tema-light" onclick="definirTema('light')">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="5"></circle>
+                    <line x1="12" y1="1" x2="12" y2="3"></line>
+                    <line x1="12" y1="21" x2="12" y2="23"></line>
+                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                    <line x1="1" y1="12" x2="3" y2="12"></line>
+                    <line x1="21" y1="12" x2="23" y2="12"></line>
+                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                  </svg>
+                  <span>Claro</span>
+                </button>
+                <button type="button" class="btn-opcao-tema" id="btn-tema-dark" onclick="definirTema('dark')">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                  </svg>
+                  <span>Escuro</span>
+                </button>
+                <button type="button" class="btn-opcao-tema" id="btn-tema-auto" onclick="definirTema('auto')">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                    <line x1="8" y1="21" x2="16" y2="21"></line>
+                    <line x1="12" y1="17" x2="12" y2="21"></line>
+                  </svg>
+                  <span>Sistema</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="secao-info-app" style="margin-top: 14px; padding: 12px; background: var(--cor-fundo); border: 1px solid var(--cor-borda); border-radius: 12px;">
+              <div style="font-size: 12.5px; font-weight: 600; color: var(--cor-texto);">Rachaê • Gestão Compartilhada</div>
+              <div style="font-size: 11.5px; color: var(--cor-texto-suave); margin-top: 2px;">
+                Aplicativo sincronizado e atualizado em tempo real.
+              </div>
+            </div>
+
+            <div class="rodape-acao-sair" style="margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--cor-borda);">
+              <span class="seletor-tema-titulo" style="margin-bottom: 8px;">Sessão do Usuário</span>
+              <button type="button" class="btn-sair-modal" onclick="logout()">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                  <polyline points="16 17 21 12 16 7"></polyline>
+                  <line x1="21" y1="12" x2="9" y2="12"></line>
+                </svg>
+                <span>Sair da conta</span>
+              </button>
+            </div>
+          </div>
+
         </div>
 
-        <div class="secao-alterar-senha">
-          <button type="button" class="btn-toggle-senha" onclick="alternarSecaoSenha()">
-            <div style="display: flex; align-items: center; gap: 6px;">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+        <!-- FOOTER FIXO -->
+        <div class="modal-perfil-footer-fixo">
+          <div id="msg-perfil-modal" class="msg-feedback-perfil" style="display: none;"></div>
+          <div class="modal-botoes-grid">
+            <button type="button" class="btn-perfil-cancelar" onclick="fecharModalPerfil()">Cancelar</button>
+            <button type="submit" id="btn-salvar-perfil" class="btn-perfil-salvar" style="background: linear-gradient(135deg, #059669 0%, #10b981 100%) !important; color: #ffffff !important; border: none !important;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12"></polyline>
               </svg>
-              <span>Alterar senha de acesso</span>
-            </div>
-            <svg id="icone-seta-senha" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="6 9 12 15 18 9"></polyline>
-            </svg>
-          </button>
-
-          <div id="container-campos-senha" style="display: none; margin-top: 12px;">
-            <div class="campo-grupo" style="margin-bottom: 10px;">
-              <label for="input-perfil-nova-senha" class="campo-label">Nova Senha</label>
-              <div class="input-com-icone input-com-olho">
-                <input type="password" id="input-perfil-nova-senha" placeholder="Mínimo 6 caracteres" autocomplete="new-password" />
-                <button type="button" class="btn-olho-senha" onclick="alternarVisibilidadeSenhaPerfil('input-perfil-nova-senha', this)" title="Ver senha">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                    <circle cx="12" cy="12" r="3"></circle>
-                  </svg>
-                </button>
-              </div>
-            </div>
-            <div class="campo-grupo" style="margin-bottom: 0;">
-              <label for="input-perfil-confirma-senha" class="campo-label">Confirmar Nova Senha</label>
-              <div class="input-com-icone input-com-olho">
-                <input type="password" id="input-perfil-confirma-senha" placeholder="Repita a nova senha" autocomplete="new-password" />
-                <button type="button" class="btn-olho-senha" onclick="alternarVisibilidadeSenhaPerfil('input-perfil-confirma-senha', this)" title="Ver senha">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                    <circle cx="12" cy="12" r="3"></circle>
-                  </svg>
-                </button>
-              </div>
-            </div>
+              <span>Salvar Alterações</span>
+            </button>
           </div>
-        </div>
-
-        <div id="msg-perfil-modal" class="msg-feedback-perfil" style="display: none;"></div>
-
-        <div class="modal-botoes-grid" style="margin-top: 18px;">
-          <button type="button" class="secundario" onclick="fecharModalPerfil()">Cancelar</button>
-          <button type="submit" id="btn-salvar-perfil" class="btn-primario-salvar">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="20 6 9 17 4 12"></polyline>
-            </svg>
-            <span>Salvar Alterações</span>
-          </button>
-        </div>
-
-        <div class="rodape-acao-sair">
-          <button type="button" class="btn-sair-modal" onclick="logout()">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-              <polyline points="16 17 21 12 16 7"></polyline>
-              <line x1="21" y1="12" x2="9" y2="12"></line>
-            </svg>
-            <span>Sair da conta</span>
-          </button>
         </div>
       </form>
     </div>
@@ -451,11 +682,98 @@ function garantirModalPerfil() {
       const previewNome = modal.querySelector("#modal-perfil-preview-nome");
       if (previewIniciais) previewIniciais.textContent = calcularIniciais(v || "Usuário");
       if (previewNome) previewNome.textContent = v || "Usuário";
+      atualizarPreviewPixPerfil();
     });
+  }
+
+  const inputPixTipo = modal.querySelector("#input-perfil-pix-tipo");
+  if (inputPixTipo) {
+    inputPixTipo.addEventListener("change", () => {
+      atualizarPlaceholderPixPerfil();
+      aoDigitarChavePixPerfil();
+      atualizarPreviewPixPerfil();
+    });
+  }
+
+  const inputPixChave = modal.querySelector("#input-perfil-pix-chave");
+  if (inputPixChave) {
+    inputPixChave.addEventListener("input", () => {
+      aoDigitarChavePixPerfil();
+      atualizarPreviewPixPerfil();
+    });
+  }
+
+  const inputPixTitular = modal.querySelector("#input-perfil-pix-titular");
+  if (inputPixTitular) {
+    inputPixTitular.addEventListener("input", atualizarPreviewPixPerfil);
+  }
+
+  const inputPixBanco = modal.querySelector("#input-perfil-pix-banco");
+  if (inputPixBanco) {
+    inputPixBanco.addEventListener("input", atualizarPreviewPixPerfil);
   }
 
   return modal;
 }
+
+function alternarAbaPerfil(aba) {
+  const abas = ["dados", "pix", "ajustes"];
+  abas.forEach((a) => {
+    const btn = document.getElementById(`tab-btn-${a}`);
+    const painel = document.getElementById(`aba-painel-${a}`);
+    if (btn) {
+      if (a === aba) {
+        btn.classList.add("ativo");
+        btn.setAttribute("aria-selected", "true");
+        btn.style.setProperty("background", "linear-gradient(135deg, #059669 0%, #10b981 100%)", "important");
+        btn.style.setProperty("color", "#ffffff", "important");
+        btn.style.setProperty("font-weight", "700", "important");
+        btn.style.setProperty("box-shadow", "0 2px 8px rgba(16, 185, 129, 0.35)", "important");
+      } else {
+        btn.classList.remove("ativo");
+        btn.setAttribute("aria-selected", "false");
+        btn.style.setProperty("background", "transparent", "important");
+        btn.style.setProperty("color", "var(--cor-texto-suave, #a1a1aa)", "important");
+        btn.style.setProperty("font-weight", "600", "important");
+        btn.style.setProperty("box-shadow", "none", "important");
+      }
+    }
+    if (painel) {
+      if (a === aba) {
+        painel.style.display = "block";
+        painel.classList.add("ativo");
+      } else {
+        painel.style.display = "none";
+        painel.classList.remove("ativo");
+      }
+    }
+  });
+}
+
+function atualizarPreviewPixPerfil() {
+  const tipo = document.getElementById("input-perfil-pix-tipo")?.value || "telefone";
+  const chave = document.getElementById("input-perfil-pix-chave")?.value?.trim() || "";
+  const titular = document.getElementById("input-perfil-pix-titular")?.value?.trim() || "";
+  const banco = document.getElementById("input-perfil-pix-banco")?.value?.trim() || "";
+  const inputNome = document.getElementById("input-perfil-nome")?.value?.trim() || "";
+  const nomeUsuario = inputNome || (perfilUsuarioAtual && perfilUsuarioAtual.nome) || "Morador";
+
+  const elChave = document.getElementById("pix-preview-chave-val");
+  const elMeta = document.getElementById("pix-preview-meta-val");
+
+  if (elChave) {
+    elChave.textContent = chave || "Nenhuma chave cadastrada";
+  }
+  if (elMeta) {
+    const rotuloTipo = rotuloTipoPix(tipo);
+    const titularExibido = titular || nomeUsuario;
+    const bancoExibido = banco ? ` • ${banco}` : "";
+    elMeta.textContent = `${rotuloTipo} • Titular: ${titularExibido}${bancoExibido}`;
+  }
+}
+
+window.alternarAbaPerfil = alternarAbaPerfil;
+window.atualizarPreviewPixPerfil = atualizarPreviewPixPerfil;
 
 function abrirModalPerfil() {
   const modal = garantirModalPerfil();
@@ -475,6 +793,23 @@ function abrirModalPerfil() {
   if (previewAvatar) previewAvatar.textContent = calcularIniciais(perfil.nome);
   if (previewNome) previewNome.textContent = perfil.nome || "Usuário";
   if (previewEmail) previewEmail.textContent = perfil.email || "";
+
+  // Campos de Chave Pix Pessoal
+  const inputPixTipo = document.getElementById("input-perfil-pix-tipo");
+  const inputPixChave = document.getElementById("input-perfil-pix-chave");
+  const inputPixTitular = document.getElementById("input-perfil-pix-titular");
+  const inputPixBanco = document.getElementById("input-perfil-pix-banco");
+
+  if (inputPixTipo) inputPixTipo.value = perfil.tipo_chave_pix || "telefone";
+  if (inputPixChave) {
+    inputPixChave.value = formatarChavePixGenerica(perfil.chave_pix || "", perfil.tipo_chave_pix || "telefone");
+  }
+  if (inputPixTitular) inputPixTitular.value = perfil.nome_titular_pix || "";
+  if (inputPixBanco) inputPixBanco.value = perfil.banco_pix || "";
+
+  atualizarPlaceholderPixPerfil();
+  atualizarPreviewPixPerfil();
+  alternarAbaPerfil("dados");
 
   const inputNovaSenha = document.getElementById("input-perfil-nova-senha");
   const inputConfirma = document.getElementById("input-perfil-confirma-senha");
@@ -497,14 +832,19 @@ function abrirModalPerfil() {
   if (btnSalvar) {
     btnSalvar.disabled = false;
     btnSalvar.innerHTML = `
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
         <polyline points="20 6 9 17 4 12"></polyline>
       </svg>
       <span>Salvar Alterações</span>
     `;
   }
 
+  atualizarBotoesTemaPerfil();
   modal.style.display = "flex";
+  if (window.Animacoes && typeof window.Animacoes.animarAberturaModal === "function") {
+    const cardModal = modal.querySelector(".modal-card-perfil") || modal;
+    window.Animacoes.animarAberturaModal(modal, cardModal);
+  }
   document.addEventListener("keydown", onKeyDownPerfilModal);
 
   setTimeout(() => {
@@ -515,7 +855,16 @@ function abrirModalPerfil() {
 function fecharModalPerfil() {
   const modal = document.getElementById("modal-perfil-usuario");
   if (modal) {
-    modal.style.display = "none";
+    const fecharImediato = () => {
+      modal.style.setProperty("display", "none", "important");
+      modal.classList.remove("ativo");
+    };
+    if (window.Animacoes && typeof window.Animacoes.animarFechamentoModal === "function") {
+      const cardModal = modal.querySelector(".modal-card-perfil") || modal;
+      window.Animacoes.animarFechamentoModal(modal, cardModal, fecharImediato);
+    } else {
+      fecharImediato();
+    }
   }
   document.removeEventListener("keydown", onKeyDownPerfilModal);
 }
@@ -548,19 +897,52 @@ async function salvarPerfilUsuario(event) {
   const novaSenha = inputNovaSenha ? inputNovaSenha.value : "";
   const confirmaSenha = inputConfirma ? inputConfirma.value : "";
 
+  const inputPixTipo = document.getElementById("input-perfil-pix-tipo");
+  const inputPixChave = document.getElementById("input-perfil-pix-chave");
+  const inputPixTitular = document.getElementById("input-perfil-pix-titular");
+  const inputPixBanco = document.getElementById("input-perfil-pix-banco");
+
+  const novoPixTipo = inputPixTipo ? inputPixTipo.value : "telefone";
+  let novoPixChave = inputPixChave ? inputPixChave.value.trim() : "";
+  const novoPixTitular = inputPixTitular ? inputPixTitular.value.trim() : "";
+  const novoPixBanco = inputPixBanco ? inputPixBanco.value.trim() : "";
+
   if (!novoNome || novoNome.length < 2) {
+    alternarAbaPerfil("dados");
     mostrarMensagemModal("Por favor, informe seu nome (pelo menos 2 letras).", "erro");
     if (inputNome) inputNome.focus();
     return;
   }
 
+  // Validação da Chave Pix (se preenchida)
+  if (novoPixChave) {
+    const validacaoPix = validarChavePixCompleta(novoPixChave, novoPixTipo);
+    if (!validacaoPix.valido) {
+      alternarAbaPerfil("pix");
+      mostrarMensagemModal(validacaoPix.erro || "Chave Pix inválida para o tipo selecionado.", "erro");
+      if (inputPixChave) inputPixChave.focus();
+      return;
+    }
+    novoPixChave = validacaoPix.chaveNormalizada;
+  }
+
   if (novaSenha) {
     if (novaSenha.length < 6) {
+      alternarAbaPerfil("dados");
+      const containerCamposSenha = document.getElementById("container-campos-senha");
+      if (containerCamposSenha && containerCamposSenha.style.display === "none") {
+        alternarSecaoSenha();
+      }
       mostrarMensagemModal("A nova senha deve possuir pelo menos 6 caracteres.", "erro");
       if (inputNovaSenha) inputNovaSenha.focus();
       return;
     }
     if (novaSenha !== confirmaSenha) {
+      alternarAbaPerfil("dados");
+      const containerCamposSenha = document.getElementById("container-campos-senha");
+      if (containerCamposSenha && containerCamposSenha.style.display === "none") {
+        alternarSecaoSenha();
+      }
       mostrarMensagemModal("As senhas informadas não conferem.", "erro");
       if (inputConfirma) inputConfirma.focus();
       return;
@@ -579,12 +961,16 @@ async function salvarPerfilUsuario(event) {
       throw new Error("Sessão expirada. Por favor, entre novamente.");
     }
 
-    // 1. Atualiza na tabela public.profiles
+    // 1. Atualiza na tabela public.profiles (incluindo chave Pix pessoal)
     const { error: errProfiles } = await supabaseClient
       .from("profiles")
       .update({
         nome: novoNome,
         telefone: novoTelefone || null,
+        chave_pix: novoPixChave || null,
+        tipo_chave_pix: novoPixTipo || "telefone",
+        nome_titular_pix: novoPixTitular || null,
+        banco_pix: novoPixBanco || null,
       })
       .eq("id", usuarioId);
 
@@ -612,6 +998,10 @@ async function salvarPerfilUsuario(event) {
     if (perfilUsuarioAtual) {
       perfilUsuarioAtual.nome = novoNome;
       perfilUsuarioAtual.telefone = novoTelefone;
+      perfilUsuarioAtual.chave_pix = novoPixChave;
+      perfilUsuarioAtual.tipo_chave_pix = novoPixTipo;
+      perfilUsuarioAtual.nome_titular_pix = novoPixTitular;
+      perfilUsuarioAtual.banco_pix = novoPixBanco;
     }
     window.perfilUsuarioAtual = perfilUsuarioAtual;
 
@@ -621,7 +1011,15 @@ async function salvarPerfilUsuario(event) {
     // 5. Dispara evento customizado para que páginas abertas (ex: Dashboard) possam reagir
     window.dispatchEvent(
       new CustomEvent("perfilAtualizado", {
-        detail: { id: usuarioId, nome: novoNome, telefone: novoTelefone },
+        detail: {
+          id: usuarioId,
+          nome: novoNome,
+          telefone: novoTelefone,
+          chave_pix: novoPixChave,
+          tipo_chave_pix: novoPixTipo,
+          nome_titular_pix: novoPixTitular,
+          banco_pix: novoPixBanco,
+        },
       })
     );
 
@@ -993,6 +1391,151 @@ function gerarPayloadPix({ chave, tipo, nome, cidade, valor, identificador }) {
   return payload + crc;
 }
 
+// ============================================================
+// Utilitários de Formatação e Validação de Chave Pix do Morador
+// ============================================================
+function atualizarPlaceholderPixPerfil() {
+  const select = document.getElementById("input-perfil-pix-tipo");
+  const input = document.getElementById("input-perfil-pix-chave");
+  const hint = document.getElementById("hint-perfil-pix");
+  if (!select || !input) return;
+
+  const tipo = select.value;
+  switch (tipo) {
+    case "telefone":
+      input.placeholder = "(00) 00000-0000";
+      if (hint) hint.textContent = "Celular com DDD (10 ou 11 dígitos).";
+      break;
+    case "cpf":
+      input.placeholder = "000.000.000-00";
+      if (hint) hint.textContent = "CPF do titular (11 dígitos).";
+      break;
+    case "cnpj":
+      input.placeholder = "00.000.000/0000-00";
+      if (hint) hint.textContent = "CNPJ da pessoa jurídica (14 dígitos).";
+      break;
+    case "email":
+      input.placeholder = "seu.email@exemplo.com";
+      if (hint) hint.textContent = "E-mail cadastrado como chave Pix no seu banco.";
+      break;
+    case "aleatoria":
+      input.placeholder = "Ex: 123e4567-e89b-12d3-a456-426614174000";
+      if (hint) hint.textContent = "Chave aleatória gerada pelo seu banco.";
+      break;
+    default:
+      input.placeholder = "Digite sua chave Pix";
+      if (hint) hint.textContent = "";
+  }
+}
+
+function aoDigitarChavePixPerfil() {
+  const select = document.getElementById("input-perfil-pix-tipo");
+  const input = document.getElementById("input-perfil-pix-chave");
+  if (!select || !input) return;
+
+  const tipo = select.value;
+  if (tipo === "telefone") {
+    input.value = formatarTelefonePix(input.value);
+  } else if (tipo === "cpf") {
+    input.value = formatarCpfPix(input.value);
+  } else if (tipo === "cnpj") {
+    input.value = formatarCnpjPix(input.value);
+  }
+}
+
+function formatarTelefonePix(val) {
+  if (!val) return "";
+  const digits = val.replace(/\D/g, "").slice(0, 11);
+  if (digits.length <= 2) return digits.length ? `(${digits}` : "";
+  if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  if (digits.length <= 10) return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7, 11)}`;
+}
+
+function formatarCpfPix(val) {
+  if (!val) return "";
+  const digits = val.replace(/\D/g, "").slice(0, 11);
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return `${digits.slice(0, 3)}.${digits.slice(3)}`;
+  if (digits.length <= 9) return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`;
+  return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9, 11)}`;
+}
+
+function formatarCnpjPix(val) {
+  if (!val) return "";
+  const digits = val.replace(/\D/g, "").slice(0, 14);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 5) return `${digits.slice(0, 2)}.${digits.slice(2)}`;
+  if (digits.length <= 8) return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5)}`;
+  if (digits.length <= 12) return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8)}`;
+  return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8, 12)}-${digits.slice(12, 14)}`;
+}
+
+function formatarChavePixGenerica(chave, tipo) {
+  if (!chave) return "";
+  if (tipo === "telefone") return formatarTelefonePix(chave);
+  if (tipo === "cpf") return formatarCpfPix(chave);
+  if (tipo === "cnpj") return formatarCnpjPix(chave);
+  return chave;
+}
+
+function rotuloTipoPix(tipo) {
+  const map = {
+    telefone: "Celular",
+    cpf: "CPF",
+    cnpj: "CNPJ",
+    email: "E-mail",
+    aleatoria: "Aleatória",
+  };
+  return map[tipo] || "Pix";
+}
+
+function validarChavePixCompleta(chave, tipo) {
+  const c = (chave || "").trim();
+  if (!c) return { valido: true, chaveNormalizada: "" };
+
+  if (tipo === "telefone") {
+    const digitos = c.replace(/\D/g, "");
+    if (digitos.length !== 10 && digitos.length !== 11) {
+      return { valido: false, erro: "O celular Pix deve ter DDD + número (10 ou 11 dígitos)." };
+    }
+    return { valido: true, chaveNormalizada: digitos };
+  }
+
+  if (tipo === "cpf") {
+    const digitos = c.replace(/\D/g, "");
+    if (digitos.length !== 11) {
+      return { valido: false, erro: "O CPF Pix deve conter 11 dígitos." };
+    }
+    return { valido: true, chaveNormalizada: digitos };
+  }
+
+  if (tipo === "cnpj") {
+    const digitos = c.replace(/\D/g, "");
+    if (digitos.length !== 14) {
+      return { valido: false, erro: "O CNPJ Pix deve conter 14 dígitos." };
+    }
+    return { valido: true, chaveNormalizada: digitos };
+  }
+
+  if (tipo === "email") {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c)) {
+      return { valido: false, erro: "Informe um e-mail válido para a chave Pix." };
+    }
+    return { valido: true, chaveNormalizada: c.toLowerCase() };
+  }
+
+  if (tipo === "aleatoria") {
+    const limpa = c.replace(/\s+/g, "");
+    if (limpa.length < 32 || limpa.length > 36) {
+      return { valido: false, erro: "A chave aleatória Pix costuma ter entre 32 e 36 caracteres." };
+    }
+    return { valido: true, chaveNormalizada: limpa };
+  }
+
+  return { valido: true, chaveNormalizada: c };
+}
+
 // Expõe no escopo global
 window.mostrarConfirmacao = mostrarConfirmacao;
 window.mostrarAlerta = mostrarAlerta;
@@ -1007,28 +1550,68 @@ window.fecharModalPerfil = fecharModalPerfil;
 window.salvarPerfilUsuario = salvarPerfilUsuario;
 window.alternarSecaoSenha = alternarSecaoSenha;
 window.alternarVisibilidadeSenhaPerfil = alternarVisibilidadeSenhaPerfil;
+window.atualizarPlaceholderPixPerfil = atualizarPlaceholderPixPerfil;
+window.aoDigitarChavePixPerfil = aoDigitarChavePixPerfil;
+window.formatarTelefonePix = formatarTelefonePix;
+window.formatarCpfPix = formatarCpfPix;
+window.formatarCnpjPix = formatarCnpjPix;
+window.formatarChavePixGenerica = formatarChavePixGenerica;
+window.rotuloTipoPix = rotuloTipoPix;
+window.validarChavePixCompleta = validarChavePixCompleta;
 
 // ============================================================
-// Gerenciamento de Tema (Dark / Light Mode)
+// Gerenciamento de Tema (Dark / Light / Auto Mode)
 // ============================================================
+function atualizarBotoesTemaPerfil() {
+  const temaSalvo = localStorage.getItem("rachae_tema") || "auto";
+  const botoes = {
+    light: document.getElementById("btn-tema-light"),
+    dark: document.getElementById("btn-tema-dark"),
+    auto: document.getElementById("btn-tema-auto"),
+  };
+  Object.keys(botoes).forEach((key) => {
+    if (botoes[key]) {
+      if (key === temaSalvo) {
+        botoes[key].classList.add("ativo");
+      } else {
+        botoes[key].classList.remove("ativo");
+      }
+    }
+  });
+}
+
 function inicializarTema() {
   const temaSalvo = localStorage.getItem("rachae_tema");
-  if (temaSalvo) {
+  if (temaSalvo === "dark" || temaSalvo === "light") {
     document.documentElement.setAttribute("data-tema", temaSalvo);
   } else {
     const prefereDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
     document.documentElement.setAttribute("data-tema", prefereDark ? "dark" : "light");
   }
+  atualizarBotoesTemaPerfil();
+}
+
+function definirTema(opcao) {
+  if (opcao === "auto") {
+    localStorage.removeItem("rachae_tema");
+    const prefereDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    document.documentElement.setAttribute("data-tema", prefereDark ? "dark" : "light");
+  } else {
+    localStorage.setItem("rachae_tema", opcao);
+    document.documentElement.setAttribute("data-tema", opcao);
+  }
+  atualizarBotoesTemaPerfil();
 }
 
 function alternarTema() {
   const temaAtual = document.documentElement.getAttribute("data-tema");
   const novoTema = temaAtual === "dark" ? "light" : "dark";
-  document.documentElement.setAttribute("data-tema", novoTema);
-  localStorage.setItem("rachae_tema", novoTema);
+  definirTema(novoTema);
 }
 
+window.definirTema = definirTema;
 window.alternarTema = alternarTema;
+window.atualizarBotoesTemaPerfil = atualizarBotoesTemaPerfil;
 inicializarTema();
 
 // ============================================================

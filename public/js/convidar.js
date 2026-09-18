@@ -298,6 +298,8 @@ function renderizarMoradoresNaTela(membros, animar = false) {
     .map((m) => {
       const nome = m.profiles ? m.profiles.nome : "Morador";
       const telefone = m.profiles && m.profiles.telefone ? m.profiles.telefone : null;
+      const chavePix = m.profiles && m.profiles.chave_pix ? m.profiles.chave_pix : null;
+      const tipoPix = m.profiles && m.profiles.tipo_chave_pix ? m.profiles.tipo_chave_pix : "telefone";
       const telDigitos = telefone ? telefone.replace(/\D/g, "") : "";
       const waNum = telDigitos.length === 10 || telDigitos.length === 11 ? "55" + telDigitos : telDigitos;
       const waLink = waNum
@@ -309,19 +311,36 @@ function renderizarMoradoresNaTela(membros, animar = false) {
 
       return `
         <div class="linha">
-          <div class="linha-com-avatar">
+          <div class="linha-com-avatar" style="flex: 1; min-width: 0; margin-right: 10px;">
             ${gerarAvatarHtml(nome, m.usuario_id, 32, mapaCoresMoradores[m.usuario_id])}
-            <div>
-              <strong>${escapeHtml(nome)}${m.usuario_id === usuarioIdAtual ? " (você)" : ""}</strong><br/>
-              <span class="texto-suave">
-                ${m.papel === "admin" ? "Administrador" : "Morador"}
-                ${telefone ? `· ${formatarTelefone(telefone)}` : ""}
-              </span>
+            <div style="min-width: 0; flex: 1;">
+              <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                <strong style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px;">${escapeHtml(nome)}${m.usuario_id === usuarioIdAtual ? " (você)" : ""}</strong>
+                <span class="badge neutro" style="font-size: 9.5px; font-weight: 600; padding: 1px 6px;">${m.papel === "admin" ? "Admin" : "Morador"}</span>
+              </div>
               ${
-                mapaConfiabilidade[m.usuario_id] !== undefined
-                  ? `<br/><span class="badge ${mapaConfiabilidade[m.usuario_id] >= 80 ? "pago" : "pendente"}" style="font-size: 10px; padding: 2px 6px; margin-top: 3px; display: inline-block;" title="Percentual de cobranças pagas em dia">${mapaConfiabilidade[m.usuario_id]}% em dia</span>`
+                telefone
+                  ? `<div class="texto-suave" style="font-size: 12px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${formatarTelefone(telefone)}</div>`
                   : ""
               }
+              <div style="display: flex; align-items: center; gap: 5px; margin-top: 4px; flex-wrap: wrap;">
+                ${
+                  mapaConfiabilidade[m.usuario_id] !== undefined
+                    ? `<span class="badge ${mapaConfiabilidade[m.usuario_id] >= 80 ? "pago" : "pendente"}" style="font-size: 10px; padding: 2px 6px;" title="Percentual de cobranças pagas em dia">${mapaConfiabilidade[m.usuario_id]}% em dia</span>`
+                    : ""
+                }
+                ${
+                  chavePix
+                    ? `<button type="button" class="badge-pix-morador" onclick="copiarChavePixMoradorDireto('${escapeHtml(chavePix)}', '${escapeHtml(nome)}')" title="Chave Pix: ${escapeHtml(chavePix)} (${typeof window.rotuloTipoPix === "function" ? window.rotuloTipoPix(tipoPix) : tipoPix}) — Clique para copiar">
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                          <rect x="3" y="5" width="18" height="14" rx="2"></rect>
+                          <circle cx="12" cy="12" r="2.5"></circle>
+                        </svg>
+                        <span>Pix: ${escapeHtml(chavePix)}</span>
+                      </button>`
+                    : ""
+                }
+              </div>
             </div>
           </div>
           <div class="acoes-morador-grid">
@@ -337,13 +356,13 @@ function renderizarMoradoresNaTela(membros, animar = false) {
             ${
               podeEditar
                 ? `
-              <button type="button" class="btn-icone" onclick="abrirModalEditarMorador('${m.usuario_id}', '${encodeURIComponent(nome)}', '${encodeURIComponent(telefone || '')}', '${m.papel}')" title="Editar dados do morador" aria-label="Editar">
+              <button type="button" class="btn-icone" onclick="abrirModalEditarMorador('${m.usuario_id}', '${encodeURIComponent(nome)}', '${encodeURIComponent(telefone || '')}', '${m.papel}', false, '${encodeURIComponent(chavePix || '')}', '${tipoPix}')" title="Editar dados do morador" aria-label="Editar">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
                 </svg>
               </button>
             `
-                : `<span class="espaco-acao-vazio" aria-hidden="true"></span>`
+                : ""
             }
             ${
               waLink
@@ -374,7 +393,7 @@ function renderizarMoradoresNaTela(membros, animar = false) {
                   </svg>
                 </button>
               `
-                : `<span class="espaco-acao-vazio" aria-hidden="true"></span>`
+                : ""
             }
           </div>
         </div>
@@ -410,7 +429,7 @@ async function carregarMoradores() {
   // 2. REVALIDAÇÃO SILENCIOSA EM SEGUNDO PLANO
   const { data: membros, error } = await supabaseClient
     .from("membros_casa")
-    .select("id, usuario_id, papel, entrou_em, profiles ( nome, telefone )")
+    .select("id, usuario_id, papel, entrou_em, profiles ( id, nome, telefone, chave_pix, tipo_chave_pix, nome_titular_pix, banco_pix )")
     .eq("casa_id", casaId);
 
   if (error) {
@@ -629,6 +648,7 @@ function configurarEventosConvidar() {
 
 function copiarCodigo(codigo) {
   navigator.clipboard.writeText(codigo);
+  if (window.vibrar) window.vibrar(20);
   mostrarToast("Código da casa copiado!");
 
   if (window.Animacoes) {
@@ -641,6 +661,7 @@ function copiarCodigo(codigo) {
 
 function copiarLink(link) {
   navigator.clipboard.writeText(link);
+  if (window.vibrar) window.vibrar(20);
   mostrarToast("Link de convite copiado!");
 
   if (window.Animacoes) {
@@ -1000,9 +1021,10 @@ window.fecharModalExtratoPorOverlay = fecharModalExtratoPorOverlay;
 // ------------------------------------------------------------
 // Edição de dados do Morador (Nome, Telefone, Papel)
 // ------------------------------------------------------------
-function abrirModalEditarMorador(usuarioId, nomeCodificado, telefoneCodificado, papel, focarTelefone = false) {
+function abrirModalEditarMorador(usuarioId, nomeCodificado, telefoneCodificado, papel, focarTelefone = false, chavePixCodificada = "", tipoPix = "telefone") {
   const nome = decodeURIComponent(nomeCodificado || "");
   const telefone = decodeURIComponent(telefoneCodificado || "");
+  const chavePix = decodeURIComponent(chavePixCodificada || "");
 
   const modal = document.getElementById("modal-editar-morador");
   const inputId = document.getElementById("edit-morador-id");
@@ -1010,6 +1032,8 @@ function abrirModalEditarMorador(usuarioId, nomeCodificado, telefoneCodificado, 
   const inputTel = document.getElementById("edit-morador-telefone");
   const selectPapel = document.getElementById("edit-morador-papel");
   const campoPapel = document.getElementById("campo-edit-morador-papel");
+  const selectPixTipo = document.getElementById("edit-morador-pix-tipo");
+  const inputPixChave = document.getElementById("edit-morador-pix-chave");
 
   if (!modal) return;
 
@@ -1017,6 +1041,12 @@ function abrirModalEditarMorador(usuarioId, nomeCodificado, telefoneCodificado, 
   if (inputNome) inputNome.value = nome;
   if (inputTel) inputTel.value = telefone;
   if (selectPapel) selectPapel.value = papel || "morador";
+  if (selectPixTipo) selectPixTipo.value = tipoPix || "telefone";
+  if (inputPixChave) {
+    inputPixChave.value = typeof window.formatarChavePixGenerica === "function"
+      ? window.formatarChavePixGenerica(chavePix, tipoPix || "telefone")
+      : chavePix;
+  }
 
   // Apenas admin pode alterar papel de outro morador
   if (campoPapel) {
@@ -1057,16 +1087,31 @@ async function salvarEdicaoMorador(event) {
   const inputNome = document.getElementById("edit-morador-nome");
   const inputTel = document.getElementById("edit-morador-telefone");
   const selectPapel = document.getElementById("edit-morador-papel");
+  const selectPixTipo = document.getElementById("edit-morador-pix-tipo");
+  const inputPixChave = document.getElementById("edit-morador-pix-chave");
   const btnSalvar = document.getElementById("btn-salvar-edicao-morador");
 
   const targetUsuarioId = inputId ? inputId.value : null;
   const novoNome = inputNome ? inputNome.value.trim() : "";
   const novoTel = inputTel ? inputTel.value.trim() : "";
   const novoPapel = selectPapel ? selectPapel.value : "morador";
+  const novoPixTipo = selectPixTipo ? selectPixTipo.value : "telefone";
+  let novoPixChave = inputPixChave ? inputPixChave.value.trim() : "";
 
   if (!targetUsuarioId || !novoNome) {
     mostrarToast("Por favor, preencha o nome do morador.", "alerta");
     return;
+  }
+
+  // Validação da chave Pix se informada
+  if (novoPixChave && typeof window.validarChavePixCompleta === "function") {
+    const valPix = window.validarChavePixCompleta(novoPixChave, novoPixTipo);
+    if (!valPix.valido) {
+      mostrarToast(valPix.erro || "Chave Pix inválida.", "alerta");
+      if (inputPixChave) inputPixChave.focus();
+      return;
+    }
+    novoPixChave = valPix.chaveNormalizada;
   }
 
   const txtOriginal = btnSalvar ? btnSalvar.textContent : "Salvar";
@@ -1076,12 +1121,14 @@ async function salvarEdicaoMorador(event) {
   }
 
   try {
-    // 1. Atualiza profiles
+    // 1. Atualiza profiles (incluindo chave Pix)
     const { error: errProfiles } = await supabaseClient
       .from("profiles")
       .update({
         nome: novoNome,
         telefone: novoTel || null,
+        chave_pix: novoPixChave || null,
+        tipo_chave_pix: novoPixTipo || "telefone",
       })
       .eq("id", targetUsuarioId);
 
@@ -1119,6 +1166,13 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
+function copiarChavePixMoradorDireto(chave, nome) {
+  if (!chave) return;
+  navigator.clipboard.writeText(chave);
+  if (window.vibrar) window.vibrar(20);
+  mostrarToast(`Chave Pix de ${nome ? nome.split(" ")[0] : "morador"} copiada!`, "sucesso");
+}
+
 // Exposição explícita para o escopo global (window)
 window.inicializarConvidar = inicializarConvidar;
 window.removerMorador = removerMorador;
@@ -1133,6 +1187,7 @@ window.fecharModalEditarMorador = fecharModalEditarMorador;
 window.fecharModalEditarMoradorPorOverlay = fecharModalEditarMoradorPorOverlay;
 window.salvarEdicaoMorador = salvarEdicaoMorador;
 window.filtrarExtratoMes = filtrarExtratoMes;
+window.copiarChavePixMoradorDireto = copiarChavePixMoradorDireto;
 
 // Auto-inicializa se a página for carregada diretamente pelo navegador
 if (!window.InstantNav || !window.InstantNav.emNavegacao) {

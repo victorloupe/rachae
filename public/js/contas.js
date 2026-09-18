@@ -1044,6 +1044,7 @@ function copiarChavePixMorador() {
   if (!chave) return;
 
   navigator.clipboard.writeText(chave);
+  if (window.vibrar) window.vibrar(20);
   mostrarToast("Chave Pix copiada!");
 
   if (btn && !btn.disabled) {
@@ -1093,7 +1094,38 @@ async function carregarPixCasa() {
   } catch (e) {
     console.warn("Erro ao carregar Pix da casa:", e);
   }
+
+  atualizarVisualizacaoPixPessoal();
 }
+
+function atualizarVisualizacaoPixPessoal() {
+  const box = document.getElementById("box-status-pix-pessoal");
+  const txtChave = document.getElementById("txt-pix-pessoal");
+  const txtTitular = document.getElementById("txt-pix-pessoal-titular");
+  const txtBanco = document.getElementById("txt-pix-pessoal-banco");
+  if (!box || !txtChave) return;
+
+  const perfil = window.perfilUsuarioAtual;
+  if (perfil && perfil.chave_pix) {
+    const rotulo = typeof window.rotuloTipoPix === "function" ? window.rotuloTipoPix(perfil.tipo_chave_pix) : (perfil.tipo_chave_pix || "Pix");
+    const formatada = typeof window.formatarChavePixGenerica === "function" ? window.formatarChavePixGenerica(perfil.chave_pix, perfil.tipo_chave_pix) : perfil.chave_pix;
+    txtChave.textContent = `${formatada} (${rotulo})`;
+    if (txtTitular) {
+      txtTitular.textContent = perfil.nome_titular_pix ? `Titular: ${perfil.nome_titular_pix}` : "";
+      txtTitular.style.display = perfil.nome_titular_pix ? "block" : "none";
+    }
+    if (txtBanco) {
+      txtBanco.textContent = perfil.banco_pix ? `Banco: ${perfil.banco_pix}` : "";
+      txtBanco.style.display = perfil.banco_pix ? "block" : "none";
+    }
+  } else {
+    txtChave.textContent = "Nenhuma chave cadastrada ainda";
+    if (txtTitular) txtTitular.style.display = "none";
+    if (txtBanco) txtBanco.style.display = "none";
+  }
+}
+
+window.addEventListener("perfilAtualizado", atualizarVisualizacaoPixPessoal);
 
 function rotuloTipoPix(tipo) {
   const map = {
