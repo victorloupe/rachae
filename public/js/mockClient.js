@@ -201,8 +201,29 @@
       return this;
     }
 
+    neq(column, value) {
+      this.filters.push((row) => row[column] !== value);
+      return this;
+    }
+
     gt(column, value) {
       this.filters.push((row) => row[column] > value);
+      return this;
+    }
+
+    gte(column, value) {
+      this.filters.push((row) => row[column] >= value);
+      return this;
+    }
+
+    lte(column, value) {
+      this.filters.push((row) => row[column] <= value);
+      return this;
+    }
+
+    in(column, values) {
+      const set = new Set(Array.isArray(values) ? values : [values]);
+      this.filters.push((row) => set.has(row[column]));
       return this;
     }
 

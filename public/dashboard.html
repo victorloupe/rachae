@@ -5,12 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Rachaê — Cobranças do mês</title>
   <link rel="icon" type="image/jpeg" href="assets/icon.jpg" />
-  <meta name="theme-color" content="#0f172a" />
+  <meta name="theme-color" content="#059669" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="apple-touch-icon" href="assets/icon.jpg" />
   <link rel="manifest" href="manifest.json" />
-  <link rel="stylesheet" href="css/style.css?v=12" />
+  <link rel="stylesheet" href="css/style.css?v=19" />
 </head>
 <body>
   <header class="topo">
@@ -33,14 +33,14 @@
     <div class="container">
       <!-- Cabeçalho especial exibido apenas na impressão/PDF -->
     <div class="cabecalho-print-relatorio" style="display: none;">
-      <div style="display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid #0f172a; padding-bottom: 10px; margin-bottom: 16px;">
+      <div class="print-relatorio-topo">
         <div>
-          <h1 style="margin: 0; font-size: 22px; color: #0f172a;">Rachaê — Fechamento Mensal de Despesas</h1>
-          <p id="print-info-casa" style="margin: 4px 0 0; font-size: 14px; color: #475569;">Casa: Carregando...</p>
+          <h2 class="print-relatorio-titulo">Rachaê — Fechamento Mensal de Despesas</h2>
+          <p id="print-info-casa" class="print-relatorio-casa">Casa: Carregando...</p>
         </div>
         <div style="text-align: right;">
-          <h3 id="print-info-mes" style="margin: 0; font-size: 16px; color: #0f172a;">Mês</h3>
-          <span id="print-info-emissao" style="font-size: 11px; color: #64748b;"></span>
+          <h3 id="print-info-mes" class="print-relatorio-mes">Mês</h3>
+          <span id="print-info-emissao" class="print-relatorio-emissao"></span>
         </div>
       </div>
     </div>
@@ -117,7 +117,7 @@
     <!-- Gráfico de Evolução dos Últimos 6 Meses -->
     <div class="card" id="card-grafico-evolucao">
       <h2 style="margin: 0 0 2px 0;">Evolução</h2>
-      <p class="texto-suave" style="margin: 0 0 8px 0; font-size: 12px;">Total arrecadado nos últimos 6 meses</p>
+      <p class="card-subtitulo">Total arrecadado nos últimos 6 meses</p>
       <div id="grafico-evolucao"></div>
     </div>
 
@@ -131,11 +131,11 @@
       <div class="cabecalho-secao-detalhe">
         <h2 style="margin: 0 0 10px 0;">Detalhamento</h2>
         <div class="grid-acoes-detalhe">
-          <button id="btn-gerar-ciclo" type="button" class="btn-detalhe-acao btn-primario-acao btn-detalhe-texto" title="Sincronizar contas e moradores do mês">
+          <button id="btn-gerar-ciclo" type="button" class="btn-detalhe-acao btn-primario-acao btn-detalhe-texto" title="Atualizar contas e moradores deste mês">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
             </svg>
-            <span>Sincronizar</span>
+            <span>Atualizar mês</span>
           </button>
           <div class="grupo-acoes-icone">
             <button id="btn-resumo-grupo" type="button" class="btn-detalhe-acao btn-detalhe-icone btn-whatsapp-acao" title="Enviar resumo no grupo de WhatsApp da casa" aria-label="Resumo">
@@ -227,11 +227,45 @@
   <div id="modal-lembretes" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.6); align-items:center; justify-content:center; z-index:999; backdrop-filter:blur(3px);">
     <div class="card" id="card-modal-lembretes" style="max-width:420px; margin:16px; width:100%; max-height:80vh; overflow-y:auto; box-shadow:var(--sombra-flutuante);">
       <h2 style="margin: 0 0 4px 0;">Central de Lembretes</h2>
-      <p class="texto-suave" style="margin: 0 0 12px 0; font-size: 12.5px;">
+      <p class="texto-suave" style="margin: 0 0 12px 0; font-size: 13px;">
         O Rachaê não envia mensagens automáticas — toque em cada morador para abrir um lembrete pronto no WhatsApp.
       </p>
       <div id="lista-lembretes"></div>
       <button class="secundario" onclick="fecharModalLembretes()" style="margin-top:12px;">Fechar</button>
+    </div>
+  </div>
+
+  <!-- Modal de Visualização e Download de Comprovante (Imagem/PDF) -->
+  <div id="modal-comprovante" class="modal-overlay-sistema" style="display:none;" onclick="fecharModalComprovantePorOverlay(event)">
+    <div class="card-modal-comprovante" id="card-modal-comprovante" onclick="event.stopPropagation()">
+      <div class="modal-comprovante-cabecalho">
+        <div>
+          <h2 class="modal-comprovante-titulo">Comprovante de Pagamento</h2>
+          <span class="texto-suave" id="comprovante-subtitulo">Visualização do arquivo</span>
+        </div>
+        <button type="button" class="btn-fechar-modal-x" onclick="fecharModalComprovante()" title="Fechar" aria-label="Fechar">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <div class="modal-comprovante-conteudo" id="conteudo-modal-comprovante">
+        <!-- Preview dinâmico injetado via JS (img ou iframe) -->
+      </div>
+
+      <div class="modal-comprovante-acoes">
+        <a id="btn-baixar-comprovante" href="#" download class="btn-primario btn-baixar-comprovante" target="_blank" rel="noopener">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          <span>Baixar comprovante</span>
+        </a>
+        <button type="button" class="secundario" onclick="fecharModalComprovante()" style="width: auto; min-width: 80px; margin: 0;">Fechar</button>
+      </div>
     </div>
   </div>
   </main>
@@ -275,6 +309,6 @@
   <script src="js/mockClient.js?v=14"></script>
   <script src="js/supabaseClient.js?v=14"></script>
   <script src="js/instantNav.js?v=14"></script>
-  <script src="js/dashboard.js?v=14"></script>
+  <script src="js/dashboard.js?v=19"></script>
 </body>
 </html>

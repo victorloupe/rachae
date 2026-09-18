@@ -68,6 +68,7 @@ async function inicializarContas() {
 
   papelUsuario = await obterPapelUsuarioNaCasa(casaId, session.user.id);
   configurarPermissoesInterface();
+  carregarInfoCasaTopoContas();
 
   if (window.Animacoes && !window.InstantNav?.emNavegacao) {
     window.Animacoes.animarEntradaPagina(".card, .card-metrica");
@@ -84,6 +85,18 @@ async function inicializarContas() {
 
   await carregarContas();
   await carregarPixCasa();
+}
+
+function carregarInfoCasaTopoContas() {
+  const elNome = document.getElementById("contas-nome-casa");
+  const elNum = document.getElementById("contas-numero-casa");
+  const nomeSalvo = localStorage.getItem("casa_nome");
+  const numSalvo = localStorage.getItem("casa_numero");
+  if (elNome && nomeSalvo) elNome.textContent = nomeSalvo;
+  if (elNum && numSalvo) {
+    elNum.textContent = `Nº ${numSalvo}`;
+    elNum.style.display = "inline-block";
+  }
 }
 
 window.inicializarContas = inicializarContas;

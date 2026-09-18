@@ -5,12 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Rachaê — Contas fixas</title>
   <link rel="icon" type="image/jpeg" href="assets/icon.jpg" />
-  <meta name="theme-color" content="#0f172a" />
+  <meta name="theme-color" content="#059669" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="apple-touch-icon" href="assets/icon.jpg" />
   <link rel="manifest" href="manifest.json" />
-  <link rel="stylesheet" href="css/style.css?v=12" />
+  <link rel="stylesheet" href="css/style.css?v=13" />
 </head>
 <body>
   <header class="topo">
@@ -31,14 +31,19 @@
 
   <main id="app-main">
     <div class="container">
-    <p>
-      <a class="link" href="casa.html">
+    <!-- Barra de Contexto da Casa Atual -->
+    <div class="card-casa-topo">
+      <div>
+        <h2 id="contas-nome-casa" class="titulo-casa-topo">Minha Casa</h2>
+        <span id="contas-numero-casa" class="numero-casa-tag" style="display: none;"></span>
+      </div>
+      <a class="btn-trocar-casa" href="casa.html?trocar=1" title="Trocar de casa">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="15 18 9 12 15 6"/>
+          <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
         </svg>
-        Trocar de casa
+        <span>Trocar casa</span>
       </a>
-    </p>
+    </div>
 
     <!-- Card de Orçamento Fixo Previsto -->
     <div class="card-metrica" style="margin-bottom: 16px;">
@@ -77,7 +82,7 @@
           <div>
             <label for="pix-chave">Chave Pix</label>
             <input type="text" id="pix-chave" placeholder="Digite a chave Pix" required />
-            <span id="hint-pix-chave" class="texto-suave" style="font-size: 11px; display: block; margin-top: 4px;"></span>
+            <span id="hint-pix-chave" class="texto-suave hint-campo"></span>
           </div>
         </div>
 
@@ -91,7 +96,7 @@
             <input type="text" id="pix-banco" placeholder="Ex: Nubank, Itaú..." />
           </div>
         </div>
-        <span class="texto-suave" style="font-size: 11px; display: block; margin-top: 4px;">
+        <span class="texto-suave hint-campo">
           Ajuda os moradores a conferir se estão pagando a pessoa certa antes de fazer o Pix.
         </span>
 
@@ -99,12 +104,12 @@
         <p id="msg-pix-casa"></p>
       </form>
 
-      <div id="visualizacao-pix-morador" style="display: none; background: var(--cor-fundo); padding: 12px; border-radius: 8px; border: 1px solid var(--cor-borda);">
-        <span style="font-size: 12px; font-weight: 600; color: var(--cor-texto-suave); text-transform: uppercase; letter-spacing: 0.04em; display: block;">Chave Pix Oficial</span>
-        <div id="txt-pix-morador-titular" style="display: none; font-size: 13px; font-weight: 600; color: var(--cor-texto); margin-top: 6px;"></div>
-        <div id="txt-pix-morador-banco" style="display: none; font-size: 12px; color: var(--cor-texto-suave); margin-top: 1px;"></div>
+      <div id="visualizacao-pix-morador" class="box-pix-oficial">
+        <span class="box-pix-label">Chave Pix Oficial</span>
+        <div id="txt-pix-morador-titular" class="box-pix-titular"></div>
+        <div id="txt-pix-morador-banco" class="box-pix-banco"></div>
         <div style="display: flex; align-items: center; gap: 8px; margin-top: 6px;">
-          <div id="txt-pix-morador" style="font-size: 16px; font-weight: 700; color: var(--cor-texto); flex: 1;">Nenhuma chave configurada</div>
+          <div id="txt-pix-morador" class="box-pix-chave">Nenhuma chave configurada</div>
           <button type="button" id="btn-copiar-pix-morador" class="secundario pequeno" style="display: none; width: auto; margin: 0; padding: 8px 12px; white-space: nowrap;" onclick="copiarChavePixMorador()">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 4px;">
               <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>

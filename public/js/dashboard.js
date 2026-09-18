@@ -913,23 +913,43 @@ function renderizarCiclosNaTela(animar = false) {
 
     const badgeCategoria = gerarBadgeCategoria(conta.categoria);
 
+    const subtituloVencimento = conta.dia_vencimento
+      ? `
+        <div class="cabecalho-conta-subtitulo">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+            <line x1="16" y1="2" x2="16" y2="6"></line>
+            <line x1="8" y1="2" x2="8" y2="6"></line>
+            <line x1="3" y1="10" x2="21" y2="10"></line>
+          </svg>
+          <span>Vencimento: dia ${conta.dia_vencimento}</span>
+        </div>
+      `
+      : "";
+
     html += `
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px; margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px solid var(--cor-borda);">
-        <h3 style="margin: 0; font-size: 15px; display: flex; align-items: center; flex-wrap: wrap; gap: 4px;">
-          <span>${escapeHtml(conta.nome)} — ${formatarMoeda(ciclo.valor_total)}</span>
-          ${badgeCategoria}
-          ${badgeIndividual}
-          ${badgeParcela}
-        </h3>
-        ${
-          ehAdmin
-            ? `
-          <button type="button" class="secundario pequeno" style="font-size: 11px; padding: 3px 8px; width: auto; margin: 0 !important;" onclick="ajustarValorCiclo('${ciclo.id}', '${encodeURIComponent(conta.nome)}', ${ciclo.valor_total}, '${conta.id}')" title="Ajustar valor da fatura este mês">
-            Ajustar valor
-          </button>
-        `
-            : ""
-        }
+      <div class="cabecalho-conta-ciclo">
+        <div class="cabecalho-conta-linha-topo">
+          <h3 class="cabecalho-conta-titulo">
+            <span>${escapeHtml(conta.nome)} — ${formatarMoeda(ciclo.valor_total)}</span>
+            ${badgeCategoria}
+            ${badgeIndividual}
+            ${badgeParcela}
+          </h3>
+          ${
+            ehAdmin
+              ? `
+            <button type="button" class="btn-ajustar-ciclo" onclick="ajustarValorCiclo('${ciclo.id}', '${encodeURIComponent(conta.nome)}', ${ciclo.valor_total}, '${conta.id}')" title="Ajustar valor da fatura este mês" aria-label="Ajustar valor da fatura">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3"></circle>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+              </svg>
+            </button>
+          `
+              : ""
+          }
+        </div>
+        ${subtituloVencimento}
       </div>
     `;
 
@@ -949,17 +969,17 @@ function renderizarCiclosNaTela(animar = false) {
             </div>
             <div style="text-align:right; display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
               <span class="badge ${statusInfo.classe}">${statusInfo.texto}</span>
-              <div class="acoes-linha" style="justify-content:flex-end;">
+              <div class="acoes-cobranca-grid">
                 ${
                   c.comprovante_url
                     ? `
-                <button class="btn-icone" onclick="verComprovante('${c.comprovante_url}')" title="Ver comprovante anexado" aria-label="Ver comprovante">
+                <button class="btn-icone" onclick="verComprovante('${c.comprovante_url}', '${escapeHtml(c.profiles ? c.profiles.nome : "Morador")}')" title="Ver comprovante anexado" aria-label="Ver comprovante">
                   <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
                   </svg>
                 </button>
                 `
-                    : ""
+                    : `<span class="espaco-acao-vazio" aria-hidden="true"></span>`
                 }
                 <button class="btn-icone ${c.status === 'pago' ? 'btn-icone-pix-pago' : 'btn-icone-pix-pendente'}" onclick="abrirModalPix('${c.id}')" title="${c.status === 'pago' ? 'Pix pago (ver dados)' : 'Pix pendente (ver QR Code e pagar)'}" aria-label="Pix">
                   <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1127,7 +1147,7 @@ function configurarAcoesDashboard() {
   if (btnGerar) {
     btnGerar.onclick = async () => {
       btnGerar.disabled = true;
-      mostrarToast("Sincronizando cobranças...");
+      mostrarToast("Atualizando cobranças do mês...");
 
       const mesReferencia = primeiroDiaDoMes();
       const { data: contas } = await supabaseClient
@@ -1145,7 +1165,7 @@ function configurarAcoesDashboard() {
 
       await garantirCobrancasDoMes(mesReferencia, contasDoMes, true);
       limparCacheDashboard();
-      mostrarToast("Cobranças sincronizadas com sucesso!");
+      mostrarToast("Cobranças atualizadas com sucesso!");
       await carregarCiclosDoMes();
       btnGerar.disabled = false;
     };
@@ -1732,7 +1752,7 @@ async function abrirModalPix(cobrancaId) {
   `;
   if (cobranca.comprovante_url) {
     htmlPix += `
-      <button type="button" class="secundario pequeno" style="width:100%; margin:0 !important;" onclick="verComprovante('${cobranca.comprovante_url.replace(/'/g, "\\'")}')">
+      <button type="button" class="secundario pequeno" style="width:100%; margin:0 !important;" onclick="verComprovante('${cobranca.comprovante_url.replace(/'/g, "\\'")}', '${escapeHtml(cobranca.profiles ? cobranca.profiles.nome : "Morador")}')">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle; margin-right:4px;">
           <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
           <circle cx="12" cy="12" r="3"/>
@@ -1850,22 +1870,22 @@ async function enviarCobrancaWhatsApp(cobrancaId, nomeContaOpcional = null, jaPa
     } catch (e) {}
 
     const vencTexto = diaVencimento
-      ? `📅 *Vencimento:* ${String(diaVencimento).padStart(2, "0")}/${String(dataSelecionada.getMonth() + 1).padStart(2, "0")}/${dataSelecionada.getFullYear()}\n`
+      ? `*Vencimento:* ${String(diaVencimento).padStart(2, "0")}/${String(dataSelecionada.getMonth() + 1).padStart(2, "0")}/${dataSelecionada.getFullYear()}\n`
       : "";
 
-    texto = `*Rachaê - Cobrança da Casa* 🏠\n`;
+    texto = `*Rachaê - Cobrança da Casa*\n`;
     texto += `Olá, *${nomeMorador}*!\n\n`;
     texto += `Passando para lembrar da sua parte da conta *${nomeConta}* (${mesFormatado}):\n`;
-    texto += `💰 *Valor:* *${valorFormatado}*\n`;
+    texto += `*Valor:* *${valorFormatado}*\n`;
     if (vencTexto) texto += vencTexto;
     texto += `\n`;
 
     if (chavePixCasa) {
-      texto += `🔑 *Chave Pix da Casa (${tipoChavePixCasa}):*\n\`\`\`${chavePixCasa}\`\`\`\n\n`;
+      texto += `*Chave Pix da Casa (${tipoChavePixCasa}):*\n\`\`\`${chavePixCasa}\`\`\`\n\n`;
     }
 
     if (cobranca.pix_copia_cola) {
-      texto += `📋 *Código Pix Copia e Cola:*\n\`\`\`${cobranca.pix_copia_cola}\`\`\`\n\n`;
+      texto += `*Código Pix Copia e Cola:*\n\`\`\`${cobranca.pix_copia_cola}\`\`\`\n\n`;
     }
 
     texto += `Assim que fizer o pagamento pelo app do seu banco, me avise ou envie o comprovante por aqui. Obrigado!`;
@@ -2265,20 +2285,283 @@ async function enviarComprovante(cobrancaId, inputEl) {
 }
 window.enviarComprovante = enviarComprovante;
 
-async function verComprovante(caminho) {
-  if (!caminho) return;
-  const { data, error } = await supabaseClient.storage
-    .from("comprovantes")
-    .createSignedUrl(caminho, 120);
+let comprovanteAtualUrl = null;
+let comprovanteAtualNome = "comprovante";
+let comprovanteZoomAtual = 1;
 
-  if (error || !data?.signedUrl) {
-    mostrarToast("Não foi possível abrir o comprovante.", "alerta");
+function aplicarZoomComprovante(novoZoom) {
+  novoZoom = Math.min(3.5, Math.max(0.5, Math.round(novoZoom * 100) / 100));
+  comprovanteZoomAtual = novoZoom;
+  const img = document.getElementById("comprovante-preview-img");
+  const label = document.getElementById("label-zoom-nivel");
+  const canvas = document.getElementById("comprovante-zoom-canvas");
+  const viewport = document.getElementById("comprovante-viewport");
+
+  if (img) {
+    img.style.transform = `scale(${comprovanteZoomAtual})`;
+  }
+  if (label) {
+    label.textContent = `${Math.round(comprovanteZoomAtual * 100)}%`;
+  }
+  if (canvas) {
+    if (comprovanteZoomAtual > 1) {
+      const extraH = Math.round((comprovanteZoomAtual - 1) * 160);
+      const extraV = Math.round((comprovanteZoomAtual - 1) * 120);
+      canvas.style.padding = `${extraV}px ${extraH}px`;
+    } else {
+      canvas.style.padding = "0px";
+    }
+  }
+  if (viewport) {
+    viewport.style.cursor = comprovanteZoomAtual > 1 ? "grab" : "default";
+  }
+}
+
+function alterarZoomComprovante(delta) {
+  aplicarZoomComprovante(comprovanteZoomAtual + delta);
+}
+
+function resetarZoomComprovante() {
+  aplicarZoomComprovante(1);
+  const viewport = document.getElementById("comprovante-viewport");
+  if (viewport) {
+    viewport.scrollLeft = (viewport.scrollWidth - viewport.clientWidth) / 2;
+    viewport.scrollTop = (viewport.scrollHeight - viewport.clientHeight) / 2;
+  }
+}
+
+function inicializarControlesZoom() {
+  const viewport = document.getElementById("comprovante-viewport");
+  const img = document.getElementById("comprovante-preview-img");
+  if (!viewport || !img) return;
+
+  // Alternar zoom com duplo clique / duplo toque
+  img.addEventListener("dblclick", (e) => {
+    e.preventDefault();
+    if (comprovanteZoomAtual > 1.2) {
+      resetarZoomComprovante();
+    } else {
+      aplicarZoomComprovante(2);
+    }
+  });
+
+  // Zoom suave com roda do mouse
+  viewport.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    const delta = e.deltaY < 0 ? 0.25 : -0.25;
+    alterarZoomComprovante(delta);
+  }, { passive: false });
+
+  // Panning por arraste com mouse quando houver zoom
+  let isDown = false;
+  let startX = 0;
+  let startY = 0;
+  let scrollLeft = 0;
+  let scrollTop = 0;
+
+  viewport.addEventListener("mousedown", (e) => {
+    if (comprovanteZoomAtual <= 1) return;
+    isDown = true;
+    viewport.classList.add("arrastando");
+    startX = e.pageX - viewport.offsetLeft;
+    startY = e.pageY - viewport.offsetTop;
+    scrollLeft = viewport.scrollLeft;
+    scrollTop = viewport.scrollTop;
+  });
+
+  const stopDragging = () => {
+    if (isDown) {
+      isDown = false;
+      viewport.classList.remove("arrastando");
+    }
+  };
+
+  window.addEventListener("mouseup", stopDragging);
+
+  viewport.addEventListener("mousemove", (e) => {
+    if (!isDown) return;
+    e.preventDefault();
+    const x = e.pageX - viewport.offsetLeft;
+    const y = e.pageY - viewport.offsetTop;
+    const walkX = (x - startX) * 1.4;
+    const walkY = (y - startY) * 1.4;
+    viewport.scrollLeft = scrollLeft - walkX;
+    viewport.scrollTop = scrollTop - walkY;
+  });
+}
+
+async function verComprovante(caminho, nomeMorador = "") {
+  if (!caminho) return;
+
+  const modal = document.getElementById("modal-comprovante");
+  const container = document.getElementById("conteudo-modal-comprovante");
+  const btnBaixar = document.getElementById("btn-baixar-comprovante");
+  const elSubtitulo = document.getElementById("comprovante-subtitulo");
+
+  if (!modal || !container) {
+    mostrarToast("Abrindo comprovante...");
+    const { data } = await supabaseClient.storage.from("comprovantes").createSignedUrl(caminho, 120);
+    if (data?.signedUrl) window.open(data.signedUrl, "_blank");
     return;
   }
 
-  window.open(data.signedUrl, "_blank");
+  // Prepara estado inicial de carregamento
+  container.innerHTML = `
+    <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; padding:36px 16px; min-height:200px;">
+      <div class="skeleton-shimmer" style="width:44px; height:44px; border-radius:50%;"></div>
+      <span class="texto-suave">Carregando visualização do comprovante...</span>
+    </div>
+  `;
+  if (elSubtitulo) {
+    elSubtitulo.textContent = nomeMorador ? `Comprovante de ${nomeMorador}` : "Visualização do arquivo anexado";
+  }
+  modal.style.display = "flex";
+  document.body.style.overflow = "hidden";
+
+  try {
+    let url = caminho;
+    if (!caminho.startsWith("http://") && !caminho.startsWith("https://") && !caminho.startsWith("data:")) {
+      const { data, error } = await supabaseClient.storage
+        .from("comprovantes")
+        .createSignedUrl(caminho, 3600); // 1 hora de validade
+
+      if (error || !data?.signedUrl) {
+        throw new Error(error?.message || "Não foi possível gerar link do comprovante");
+      }
+      url = data.signedUrl;
+    }
+
+    const caminhoLimpo = caminho.split("?")[0].toLowerCase();
+    const ehPdf = caminhoLimpo.endsWith(".pdf") || url.toLowerCase().includes(".pdf") || url.startsWith("data:application/pdf");
+
+    const nomeBase = caminho.split("/").pop().split("?")[0] || (ehPdf ? "comprovante.pdf" : "comprovante.jpg");
+    comprovanteAtualUrl = url;
+    comprovanteAtualNome = nomeBase;
+
+    if (btnBaixar) {
+      btnBaixar.style.display = "inline-flex";
+      btnBaixar.onclick = (e) => {
+        e.preventDefault();
+        baixarComprovanteAtual(url, nomeBase);
+      };
+    }
+
+    if (ehPdf) {
+      container.innerHTML = `
+        <div style="width:100%; height:100%; display:flex; flex-direction:column; flex:1;">
+          <iframe src="${url}#toolbar=1" class="comprovante-preview-iframe" title="Comprovante de pagamento em PDF"></iframe>
+          <div style="padding:8px 12px; background:var(--cor-card); border-top:1px solid var(--cor-borda); display:flex; justify-content:space-between; align-items:center;">
+            <span class="badge">Documento PDF</span>
+            <a href="${url}" target="_blank" rel="noopener" class="texto-suave" style="text-decoration:underline;">Abrir em tela cheia</a>
+          </div>
+        </div>
+      `;
+    } else {
+      container.innerHTML = `
+        <div class="comprovante-zoom-container">
+          <div class="comprovante-zoom-viewport" id="comprovante-viewport">
+            <div class="comprovante-zoom-canvas" id="comprovante-zoom-canvas">
+              <img id="comprovante-preview-img" src="${url}" alt="Comprovante de pagamento" class="comprovante-preview-img" onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'comprovante-fallback-pdf\\'><p class=\\'texto-suave\\'>Não foi possível exibir a imagem diretamente. Use o botão Baixar abaixo.</p></div>';" />
+            </div>
+          </div>
+          <div class="comprovante-zoom-toolbar">
+            <button type="button" class="btn-zoom-controle" onclick="alterarZoomComprovante(-0.25)" title="Diminuir zoom" aria-label="Diminuir zoom">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+            </button>
+            <button type="button" class="btn-zoom-controle" onclick="resetarZoomComprovante()" title="Redefinir tamanho" aria-label="Redefinir tamanho">
+              <span class="label-zoom-nivel" id="label-zoom-nivel">100%</span>
+            </button>
+            <button type="button" class="btn-zoom-controle" onclick="alterarZoomComprovante(0.25)" title="Aumentar zoom" aria-label="Aumentar zoom">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+            </button>
+          </div>
+        </div>
+      `;
+      comprovanteZoomAtual = 1;
+      inicializarControlesZoom();
+    }
+  } catch (err) {
+    console.error("Erro ao abrir comprovante:", err);
+    container.innerHTML = `
+      <div class="comprovante-fallback-pdf">
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--cor-alerta)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="8" x2="12" y2="12"></line>
+          <line x1="12" y1="16" x2="12.01" y2="16"></line>
+        </svg>
+        <p class="texto-suave" style="margin:0;">Não foi possível carregar a visualização do comprovante.</p>
+      </div>
+    `;
+    if (btnBaixar) btnBaixar.style.display = "none";
+    mostrarToast("Erro ao abrir comprovante.", "alerta");
+  }
 }
+
+async function baixarComprovanteAtual(url, nomeArquivo) {
+  if (!url) return;
+  try {
+    mostrarToast("Iniciando download...");
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error("Falha na requisição");
+    const blob = await resp.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = blobUrl;
+    link.download = nomeArquivo || "comprovante";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+    mostrarToast("Comprovante baixado com sucesso!", "sucesso");
+  } catch (e) {
+    // Fallback nativo
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = nomeArquivo || "comprovante";
+    link.target = "_blank";
+    link.rel = "noopener";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+}
+
+function fecharModalComprovante() {
+  const modal = document.getElementById("modal-comprovante");
+  if (modal) modal.style.display = "none";
+  const container = document.getElementById("conteudo-modal-comprovante");
+  if (container) container.innerHTML = "";
+  document.body.style.overflow = "";
+  comprovanteZoomAtual = 1;
+}
+
+function fecharModalComprovantePorOverlay(event) {
+  if (event.target && event.target.id === "modal-comprovante") {
+    fecharModalComprovante();
+  }
+}
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    const modal = document.getElementById("modal-comprovante");
+    if (modal && modal.style.display !== "none") {
+      fecharModalComprovante();
+    }
+  }
+});
+
 window.verComprovante = verComprovante;
+window.baixarComprovanteAtual = baixarComprovanteAtual;
+window.fecharModalComprovante = fecharModalComprovante;
+window.fecharModalComprovantePorOverlay = fecharModalComprovantePorOverlay;
+window.alterarZoomComprovante = alterarZoomComprovante;
+window.resetarZoomComprovante = resetarZoomComprovante;
+window.aplicarZoomComprovante = aplicarZoomComprovante;
 
 window.abrirModalPix = abrirModalPix;
 window.fecharModalPix = fecharModalPix;

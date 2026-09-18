@@ -305,6 +305,7 @@ function renderizarMoradoresNaTela(membros, animar = false) {
         : null;
 
       const podeRemover = ehAdmin && m.usuario_id !== usuarioIdAtual;
+      const podeEditar = ehAdmin || m.usuario_id === usuarioIdAtual;
 
       return `
         <div class="linha">
@@ -323,9 +324,9 @@ function renderizarMoradoresNaTela(membros, animar = false) {
               }
             </div>
           </div>
-          <div style="display: flex; align-items: center; gap: 6px;">
+          <div class="acoes-morador-grid">
             <button type="button" class="btn-icone" onclick="abrirExtratoMorador('${m.usuario_id}', '${encodeURIComponent(nome)}')" title="Ver extrato completo" aria-label="Extrato">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                 <polyline points="14 2 14 8 20 8"></polyline>
                 <line x1="16" y1="13" x2="8" y2="13"></line>
@@ -333,6 +334,17 @@ function renderizarMoradoresNaTela(membros, animar = false) {
                 <polyline points="10 9 9 9 8 9"></polyline>
               </svg>
             </button>
+            ${
+              podeEditar
+                ? `
+              <button type="button" class="btn-icone" onclick="abrirModalEditarMorador('${m.usuario_id}', '${encodeURIComponent(nome)}', '${encodeURIComponent(telefone || '')}', '${m.papel}')" title="Editar dados do morador" aria-label="Editar">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
+                </svg>
+              </button>
+            `
+                : `<span class="espaco-acao-vazio" aria-hidden="true"></span>`
+            }
             ${
               waLink
                 ? `
@@ -342,12 +354,18 @@ function renderizarMoradoresNaTela(membros, animar = false) {
                   </svg>
                 </a>
               `
-                : ""
+                : `
+                <button type="button" class="btn-icone btn-icone-whatsapp" onclick="abrirModalEditarMorador('${m.usuario_id}', '${encodeURIComponent(nome)}', '', '${m.papel}', true)" title="Cadastrar WhatsApp deste morador" aria-label="Cadastrar WhatsApp">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
+                  </svg>
+                </button>
+              `
             }
             ${
               podeRemover
                 ? `
-                <button type="button" class="btn-icone btn-icone-remover" onclick="removerMorador('${m.id}', '${encodeURIComponent(nome)}', '${m.usuario_id}')" title="Remover morador da casa" aria-label="Remover">
+                <button type="button" class="btn-icone btn-icone-remover btn-icone-perigo" onclick="removerMorador('${m.id}', '${encodeURIComponent(nome)}', '${m.usuario_id}')" title="Remover morador da casa" aria-label="Remover">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <polyline points="3 6 5 6 21 6"></polyline>
                     <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
@@ -356,7 +374,7 @@ function renderizarMoradoresNaTela(membros, animar = false) {
                   </svg>
                 </button>
               `
-                : ""
+                : `<span class="espaco-acao-vazio" aria-hidden="true"></span>`
             }
           </div>
         </div>
@@ -642,26 +660,39 @@ async function enviarConviteWhatsApp(link, codigo) {
 }
 
 // ------------------------------------------------------------
-// Extrato completo por morador: mostra tudo que a pessoa já pagou e
-// deve desde que entrou na casa — útil pra fechar conta quando
-// alguém sai, ou só pra conferir o histórico completo de alguém.
+// Extrato do morador com foco nos 3 meses:
+// 1 mês antes, mês atual e 1 mês depois.
 // ------------------------------------------------------------
 async function abrirExtratoMorador(usuarioId, nomeCodificado) {
-  const nome = decodeURIComponent(nomeCodificado);
+  const nome = decodeURIComponent(nomeCodificado || "");
   const modal = document.getElementById("modal-extrato");
   const titulo = document.getElementById("titulo-modal-extrato");
   const lista = document.getElementById("lista-extrato-morador");
   const resumo = document.getElementById("resumo-extrato-morador");
-  if (!modal || !lista) return;
+  if (!modal || !lista) {
+    mostrarToast("Abrindo extrato de " + nome);
+    return;
+  }
 
-  titulo.textContent = `Extrato de ${nome}`;
-  lista.innerHTML = `<p class="texto-suave" style="text-align:center; padding: 16px 0;">Carregando...</p>`;
-  resumo.innerHTML = "";
+  if (titulo) titulo.textContent = `Extrato de ${nome}`;
+  lista.innerHTML = `
+    <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; padding:28px 16px;">
+      <div class="skeleton-shimmer" style="width:36px; height:36px; border-radius:50%;"></div>
+      <span class="texto-suave">Carregando faturas (3 meses)...</span>
+    </div>
+  `;
+  if (resumo) resumo.innerHTML = "";
   modal.style.display = "flex";
+  document.body.style.overflow = "hidden";
 
   try {
-    const { data: contasCasa } = await supabaseClient.from("contas_fixas").select("id, nome").eq("casa_id", casaId);
-    const idsContas = (contasCasa || []).map((c) => c.id);
+    const { data: contasCasa } = await supabaseClient
+      .from("contas_fixas")
+      .select("id, nome, valor_padrao, forma_divisao, morador_especifico_id, ativa")
+      .eq("casa_id", casaId);
+
+    const contasValidas = (contasCasa || []).filter((c) => c.ativa !== false);
+    const idsContas = contasValidas.map((c) => c.id);
     const mapaNomeConta = {};
     (contasCasa || []).forEach((c) => (mapaNomeConta[c.id] = c.nome));
 
@@ -670,86 +701,422 @@ async function abrirExtratoMorador(usuarioId, nomeCodificado) {
       return;
     }
 
+    // 1. Define a janela dos 3 meses: 1 mês antes, mês atual e 1 mês depois
+    const hoje = new Date();
+    const dAnterior = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
+    const dAtual = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+    const dProximo = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 1);
+
+    const formatMesRef = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+    const formatMesChave = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+
+    const nomesMeses = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+    const nomesMesesCompletos = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+
+    const refAnterior = formatMesRef(dAnterior);
+    const refAtual = formatMesRef(dAtual);
+    const refProximo = formatMesRef(dProximo);
+
+    const chaveAnterior = formatMesChave(dAnterior);
+    const chaveAtual = formatMesChave(dAtual);
+    const chaveProximo = formatMesChave(dProximo);
+
+    const infoJanela = [
+      {
+        tipo: "proximo",
+        chave: chaveProximo,
+        mesRef: refProximo,
+        rotulo: "Próximo mês",
+        titulo: `${nomesMesesCompletos[dProximo.getMonth()]} de ${dProximo.getFullYear()}`,
+        abreviado: `${nomesMeses[dProximo.getMonth()]}/${dProximo.getFullYear()}`,
+        badgeClasse: "aviso",
+        itens: [],
+      },
+      {
+        tipo: "atual",
+        chave: chaveAtual,
+        mesRef: refAtual,
+        rotulo: "Mês atual",
+        titulo: `${nomesMesesCompletos[dAtual.getMonth()]} de ${dAtual.getFullYear()}`,
+        abreviado: `${nomesMeses[dAtual.getMonth()]}/${dAtual.getFullYear()}`,
+        badgeClasse: "pendente",
+        itens: [],
+      },
+      {
+        tipo: "anterior",
+        chave: chaveAnterior,
+        mesRef: refAnterior,
+        rotulo: "Mês anterior",
+        titulo: `${nomesMesesCompletos[dAnterior.getMonth()]} de ${dAnterior.getFullYear()}`,
+        abreviado: `${nomesMeses[dAnterior.getMonth()]}/${dAnterior.getFullYear()}`,
+        badgeClasse: "sucesso",
+        itens: [],
+      },
+    ];
+
+    // 2. Garante que os ciclos e cobranças dos 3 meses existam no banco
+    const { data: membrosCasa } = await supabaseClient
+      .from("membros_casa")
+      .select("usuario_id")
+      .eq("casa_id", casaId);
+    const membrosLista = membrosCasa || [];
+
+    for (const info of infoJanela) {
+      for (const conta of contasValidas) {
+        let { data: ciclo } = await supabaseClient
+          .from("ciclos_cobranca")
+          .select("id, valor_total")
+          .eq("conta_fixa_id", conta.id)
+          .eq("mes_referencia", info.mesRef)
+          .maybeSingle();
+
+        if (!ciclo) {
+          const valorConta = Number(conta.valor_padrao || 0);
+          const { data: novoCiclo } = await supabaseClient
+            .from("ciclos_cobranca")
+            .insert({
+              conta_fixa_id: conta.id,
+              mes_referencia: info.mesRef,
+              valor_total: valorConta,
+            })
+            .select()
+            .maybeSingle();
+          ciclo = novoCiclo;
+        }
+
+        if (ciclo && membrosLista.length > 0) {
+          const { data: cobsExistentes } = await supabaseClient
+            .from("cobrancas_individuais")
+            .select("id")
+            .eq("ciclo_id", ciclo.id);
+
+          if (!cobsExistentes || cobsExistentes.length === 0) {
+            if (conta.forma_divisao === "individual" && conta.morador_especifico_id) {
+              await supabaseClient.from("cobrancas_individuais").insert({
+                ciclo_id: ciclo.id,
+                usuario_id: conta.morador_especifico_id,
+                valor: Number(ciclo.valor_total || 0),
+                status: info.tipo === "anterior" ? "pago" : "pendente",
+              });
+            } else {
+              const valorIndividual = Math.round((Number(ciclo.valor_total || 0) / membrosLista.length) * 100) / 100;
+              const novasCobs = membrosLista.map((m) => ({
+                ciclo_id: ciclo.id,
+                usuario_id: m.usuario_id,
+                valor: valorIndividual,
+                status: info.tipo === "anterior" ? "pago" : "pendente",
+              }));
+              await supabaseClient.from("cobrancas_individuais").insert(novasCobs);
+            }
+          }
+        }
+      }
+    }
+
+    // 3. Busca todos os ciclos cadastrados para as contas da casa
     const { data: ciclos } = await supabaseClient
       .from("ciclos_cobranca")
       .select("id, conta_fixa_id, mes_referencia")
-      .in("conta_fixa_id", idsContas)
-      .order("mes_referencia", { ascending: false });
+      .in("conta_fixa_id", idsContas);
 
-    const idsCiclos = (ciclos || []).map((c) => c.id);
-    const mapaCiclo = {};
-    (ciclos || []).forEach((c) => (mapaCiclo[c.id] = c));
-
-    if (idsCiclos.length === 0) {
-      lista.innerHTML = `<p class="texto-suave" style="text-align:center; padding: 16px 0;">Nenhuma cobrança gerada ainda.</p>`;
-      return;
-    }
-
-    const { data: cobrancas, error } = await supabaseClient
-      .from("cobrancas_individuais")
-      .select("id, ciclo_id, valor, status")
-      .in("ciclo_id", idsCiclos)
-      .eq("usuario_id", usuarioId);
-
-    if (error) throw error;
-
-    if (!cobrancas || cobrancas.length === 0) {
-      lista.innerHTML = `<p class="texto-suave" style="text-align:center; padding: 16px 0;">${escapeHtml(nome)} ainda não tem cobranças registradas.</p>`;
-      return;
-    }
-
-    const linhas = cobrancas
-      .map((cob) => {
-        const ciclo = mapaCiclo[cob.ciclo_id];
-        return { ...cob, mes_referencia: ciclo ? ciclo.mes_referencia : null, conta_nome: ciclo ? mapaNomeConta[ciclo.conta_fixa_id] : "?" };
-      })
-      .sort((a, b) => (b.mes_referencia || "").localeCompare(a.mes_referencia || ""));
-
-    let totalPago = 0;
-    let totalPendente = 0;
-    linhas.forEach((l) => {
-      if (l.status === "pago") totalPago += Number(l.valor);
-      else totalPendente += Number(l.valor);
+    const chavesJanela = [chaveAnterior, chaveAtual, chaveProximo];
+    const ciclosJanela = (ciclos || []).filter((c) => {
+      if (!c.mes_referencia) return false;
+      return chavesJanela.some((k) => c.mes_referencia.startsWith(k));
     });
 
-    resumo.innerHTML = `
-      <div class="linha" style="border: none; padding: 0 0 10px 0;">
-        <div><span class="texto-suave" style="font-size: 12px;">Total pago</span><br/><strong style="color: var(--cor-sucesso, #16a34a);">${formatarMoeda(totalPago)}</strong></div>
-        <div style="text-align: right;"><span class="texto-suave" style="font-size: 12px;">Em aberto</span><br/><strong style="color: ${totalPendente > 0 ? "var(--cor-perigo, #dc2626)" : "inherit"};">${formatarMoeda(totalPendente)}</strong></div>
-      </div>
-    `;
+    const idsCiclos = ciclosJanela.map((c) => c.id);
+    const mapaCiclo = {};
+    ciclosJanela.forEach((c) => (mapaCiclo[c.id] = c));
 
-    lista.innerHTML = linhas
-      .map((l) => {
-        const [ano, mes] = (l.mes_referencia || "").split("-");
-        const nomesMeses = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
-        const mesTexto = mes ? `${nomesMeses[parseInt(mes, 10) - 1]}/${ano}` : "-";
-        const statusTexto = l.status === "pago" ? "Pago" : l.status === "atrasado" ? "Atrasada" : "Pendente";
-        const statusClasse = l.status === "pago" ? "pago" : l.status === "atrasado" ? "atrasado" : "pendente";
+    if (idsCiclos.length === 0) {
+      lista.innerHTML = `<p class="texto-suave" style="text-align:center; padding: 16px 0;">Nenhuma fatura encontrada na janela de 3 meses.</p>`;
+      return;
+    }
+
+    // 4. Busca as cobranças deste morador nos ciclos da janela
+    const { data: cobrancas, error: errCob } = await supabaseClient
+      .from("cobrancas_individuais")
+      .select("id, ciclo_id, valor, status")
+      .eq("usuario_id", usuarioId)
+      .in("ciclo_id", idsCiclos);
+
+    if (errCob) throw errCob;
+
+    const cobrancasValidas = cobrancas || [];
+    const linhas = cobrancasValidas.map((cob) => {
+      const ciclo = mapaCiclo[cob.ciclo_id];
+      return {
+        ...cob,
+        mes_referencia: ciclo ? ciclo.mes_referencia : null,
+        conta_nome: ciclo ? (mapaNomeConta[ciclo.conta_fixa_id] || "Fatura") : "Fatura",
+      };
+    });
+
+    // 5. Distribui nos 3 meses
+    infoJanela.forEach((m) => {
+      m.itens = linhas.filter((l) => l.mes_referencia && l.mes_referencia.startsWith(m.chave));
+    });
+
+    // 6. Controles de Mês (Segmented Grid de 4 Colunas sem rolagem lateral, sem emojis)
+    if (resumo) {
+      resumo.innerHTML = `
+        <div class="filtros-extrato-grid">
+          <button type="button" class="btn-filtro-extrato ativo" data-filtro-mes="todos" onclick="filtrarExtratoMes('todos')">Todos</button>
+          <button type="button" class="btn-filtro-extrato" data-filtro-mes="${chaveProximo}" onclick="filtrarExtratoMes('${chaveProximo}')">${nomesMeses[dProximo.getMonth()]}/${String(dProximo.getFullYear()).slice(-2)}</button>
+          <button type="button" class="btn-filtro-extrato" data-filtro-mes="${chaveAtual}" onclick="filtrarExtratoMes('${chaveAtual}')">${nomesMeses[dAtual.getMonth()]}/${String(dAtual.getFullYear()).slice(-2)}</button>
+          <button type="button" class="btn-filtro-extrato" data-filtro-mes="${chaveAnterior}" onclick="filtrarExtratoMes('${chaveAnterior}')">${nomesMeses[dAnterior.getMonth()]}/${String(dAnterior.getFullYear()).slice(-2)}</button>
+        </div>
+      `;
+    }
+
+    // 7. Renderiza as seções dos 3 meses em blocos/cards separados (sem emojis, ícones SVG padrão)
+    lista.innerHTML = infoJanela
+      .map((grupo) => {
+        let subtotalMes = 0;
+        let subtotalPago = 0;
+        let subtotalPendente = 0;
+        grupo.itens.forEach((l) => {
+          const val = Number(l.valor) || 0;
+          subtotalMes += val;
+          if (l.status === "pago") subtotalPago += val;
+          else subtotalPendente += val;
+        });
+
+        const itensHtml = grupo.itens.length > 0
+          ? grupo.itens
+              .map((l) => {
+                const statusTexto = l.status === "pago" ? "Pago" : l.status === "atrasado" ? "Atrasada" : "Pendente";
+                const statusClasse = l.status === "pago" ? "pago" : l.status === "atrasado" ? "atrasado" : "pendente";
+                return `
+                  <div class="item-fatura-extrato">
+                    <div class="item-fatura-esquerda">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--cor-texto-mutado); flex-shrink: 0;">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                      </svg>
+                      <strong style="font-size: 13.5px; color: var(--cor-texto);">${escapeHtml(l.conta_nome)}</strong>
+                    </div>
+                    <div class="item-fatura-direita">
+                      <strong style="font-size: 13.5px; color: var(--cor-texto);">${formatarMoeda(Number(l.valor))}</strong>
+                      <span class="badge ${statusClasse}" style="font-size: 10px; padding: 2px 7px;">${statusTexto}</span>
+                    </div>
+                  </div>
+                `;
+              })
+              .join("")
+          : `<p class="texto-suave" style="font-size: 12px; margin: 8px 0; font-style: italic;">Nenhuma fatura atribuída para ${grupo.abreviado}.</p>`;
+
         return `
-          <div class="linha" style="padding: 8px 0;">
-            <div>
-              <strong style="font-size: 13.5px;">${escapeHtml(l.conta_nome)}</strong><br/>
-              <span class="texto-suave" style="font-size: 12px;">${mesTexto}</span>
+          <div class="bloco-mes-extrato secao-extrato-mes" data-mes-chave="${grupo.chave}">
+            <div class="cabecalho-bloco-mes">
+              <div class="titulo-bloco-mes">
+                <div class="icone-calendario-box">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                    <line x1="16" y1="2" x2="16" y2="6"></line>
+                    <line x1="8" y1="2" x2="8" y2="6"></line>
+                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                  </svg>
+                </div>
+                <span>${grupo.titulo}</span>
+              </div>
+              <span class="badge ${grupo.badgeClasse}" style="font-size: 11px; padding: 2px 8px;">${grupo.rotulo}</span>
             </div>
-            <div style="text-align: right;">
-              <strong style="font-size: 13.5px;">${formatarMoeda(Number(l.valor))}</strong><br/>
-              <span class="badge ${statusClasse}" style="font-size: 10px; padding: 1px 6px;">${statusTexto}</span>
+            <div class="conteudo-bloco-mes">
+              ${itensHtml}
             </div>
+            ${
+              grupo.itens.length > 0
+                ? `
+                <div class="rodape-bloco-mes">
+                  <span class="texto-suave" style="font-weight: 600;">Total do mês</span>
+                  <div class="subtotal-valores-mes">
+                    ${subtotalPago > 0 ? `<span class="badge-subtotal-pago">Pago: ${formatarMoeda(subtotalPago)}</span>` : ""}
+                    ${subtotalPendente > 0 ? `<span class="badge-subtotal-pendente">Aberto: ${formatarMoeda(subtotalPendente)}</span>` : ""}
+                    ${subtotalPago === 0 && subtotalPendente === 0 ? `<span class="texto-suave">${formatarMoeda(subtotalMes)}</span>` : ""}
+                  </div>
+                </div>
+              `
+                : ""
+            }
           </div>
         `;
       })
       .join("");
+
+    if (lista) lista.scrollTop = 0;
   } catch (e) {
     console.warn("Erro ao carregar extrato do morador:", e);
     lista.innerHTML = `<p class="erro" style="text-align:center; padding: 16px 0;">Não foi possível carregar o extrato agora.</p>`;
   }
 }
 
+function filtrarExtratoMes(chave) {
+  const container = document.getElementById("modal-extrato");
+  if (!container) return;
+
+  const botoes = container.querySelectorAll(".btn-filtro-extrato");
+  botoes.forEach((b) => {
+    if (b.getAttribute("data-filtro-mes") === chave) {
+      b.classList.add("ativo");
+    } else {
+      b.classList.remove("ativo");
+    }
+  });
+
+  const secoes = container.querySelectorAll(".secao-extrato-mes");
+  secoes.forEach((s) => {
+    if (chave === "todos" || s.getAttribute("data-mes-chave") === chave) {
+      s.style.display = "block";
+    } else {
+      s.style.display = "none";
+    }
+  });
+
+  const lista = document.getElementById("lista-extrato-morador");
+  if (lista) lista.scrollTop = 0;
+}
+
+// Vincula funções ao escopo global para acesso seguro inline
+window.filtrarExtratoMes = filtrarExtratoMes;
+window.abrirExtratoMorador = abrirExtratoMorador;
+window.fecharModalExtrato = fecharModalExtrato;
+
 function fecharModalExtrato() {
   const modal = document.getElementById("modal-extrato");
   if (modal) modal.style.display = "none";
+  document.body.style.overflow = "";
 }
+
+function fecharModalExtratoPorOverlay(event) {
+  if (event.target && event.target.id === "modal-extrato") {
+    fecharModalExtrato();
+  }
+}
+window.fecharModalExtratoPorOverlay = fecharModalExtratoPorOverlay;
+
+// ------------------------------------------------------------
+// Edição de dados do Morador (Nome, Telefone, Papel)
+// ------------------------------------------------------------
+function abrirModalEditarMorador(usuarioId, nomeCodificado, telefoneCodificado, papel, focarTelefone = false) {
+  const nome = decodeURIComponent(nomeCodificado || "");
+  const telefone = decodeURIComponent(telefoneCodificado || "");
+
+  const modal = document.getElementById("modal-editar-morador");
+  const inputId = document.getElementById("edit-morador-id");
+  const inputNome = document.getElementById("edit-morador-nome");
+  const inputTel = document.getElementById("edit-morador-telefone");
+  const selectPapel = document.getElementById("edit-morador-papel");
+  const campoPapel = document.getElementById("campo-edit-morador-papel");
+
+  if (!modal) return;
+
+  if (inputId) inputId.value = usuarioId;
+  if (inputNome) inputNome.value = nome;
+  if (inputTel) inputTel.value = telefone;
+  if (selectPapel) selectPapel.value = papel || "morador";
+
+  // Apenas admin pode alterar papel de outro morador
+  if (campoPapel) {
+    campoPapel.style.display = papelUsuario === "admin" ? "block" : "none";
+  }
+
+  modal.style.display = "flex";
+  document.body.style.overflow = "hidden";
+
+  if (focarTelefone) {
+    setTimeout(() => {
+      if (inputTel) {
+        inputTel.focus();
+        inputTel.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }, 70);
+    mostrarToast(`Adicione o WhatsApp de ${nome ? nome.split(" ")[0] : "morador"}`, "info");
+  } else {
+    setTimeout(() => inputNome && inputNome.focus(), 50);
+  }
+}
+
+function fecharModalEditarMorador() {
+  const modal = document.getElementById("modal-editar-morador");
+  if (modal) modal.style.display = "none";
+  document.body.style.overflow = "";
+}
+
+function fecharModalEditarMoradorPorOverlay(event) {
+  if (event.target && event.target.id === "modal-editar-morador") {
+    fecharModalEditarMorador();
+  }
+}
+
+async function salvarEdicaoMorador(event) {
+  event.preventDefault();
+  const inputId = document.getElementById("edit-morador-id");
+  const inputNome = document.getElementById("edit-morador-nome");
+  const inputTel = document.getElementById("edit-morador-telefone");
+  const selectPapel = document.getElementById("edit-morador-papel");
+  const btnSalvar = document.getElementById("btn-salvar-edicao-morador");
+
+  const targetUsuarioId = inputId ? inputId.value : null;
+  const novoNome = inputNome ? inputNome.value.trim() : "";
+  const novoTel = inputTel ? inputTel.value.trim() : "";
+  const novoPapel = selectPapel ? selectPapel.value : "morador";
+
+  if (!targetUsuarioId || !novoNome) {
+    mostrarToast("Por favor, preencha o nome do morador.", "alerta");
+    return;
+  }
+
+  const txtOriginal = btnSalvar ? btnSalvar.textContent : "Salvar";
+  if (btnSalvar) {
+    btnSalvar.disabled = true;
+    btnSalvar.textContent = "Salvando...";
+  }
+
+  try {
+    // 1. Atualiza profiles
+    const { error: errProfiles } = await supabaseClient
+      .from("profiles")
+      .update({
+        nome: novoNome,
+        telefone: novoTel || null,
+      })
+      .eq("id", targetUsuarioId);
+
+    if (errProfiles) throw errProfiles;
+
+    // 2. Se admin, atualiza papel em membros_casa
+    if (papelUsuario === "admin" && novoPapel) {
+      await supabaseClient
+        .from("membros_casa")
+        .update({ papel: novoPapel })
+        .eq("casa_id", casaId)
+        .eq("usuario_id", targetUsuarioId);
+    }
+
+    mostrarToast("Morador atualizado com sucesso!", "sucesso");
+    fecharModalEditarMorador();
+    await carregarMoradores();
+
+    window.dispatchEvent(new CustomEvent("perfilAtualizado"));
+  } catch (err) {
+    console.error("Erro ao editar morador:", err);
+    mostrarToast("Erro ao salvar morador: " + (err.message || "tente novamente"), "alerta");
+  } finally {
+    if (btnSalvar) {
+      btnSalvar.disabled = false;
+      btnSalvar.textContent = txtOriginal;
+    }
+  }
+}
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    fecharModalExtrato();
+    fecharModalEditarMorador();
+  }
+});
 
 // Exposição explícita para o escopo global (window)
 window.inicializarConvidar = inicializarConvidar;
@@ -759,6 +1126,12 @@ window.copiarLink = copiarLink;
 window.enviarConviteWhatsApp = enviarConviteWhatsApp;
 window.abrirExtratoMorador = abrirExtratoMorador;
 window.fecharModalExtrato = fecharModalExtrato;
+window.fecharModalExtratoPorOverlay = fecharModalExtratoPorOverlay;
+window.abrirModalEditarMorador = abrirModalEditarMorador;
+window.fecharModalEditarMorador = fecharModalEditarMorador;
+window.fecharModalEditarMoradorPorOverlay = fecharModalEditarMoradorPorOverlay;
+window.salvarEdicaoMorador = salvarEdicaoMorador;
+window.filtrarExtratoMes = filtrarExtratoMes;
 
 // Auto-inicializa se a página for carregada diretamente pelo navegador
 if (!window.InstantNav || !window.InstantNav.emNavegacao) {
