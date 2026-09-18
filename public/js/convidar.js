@@ -670,7 +670,8 @@ async function abrirExtratoMorador(usuarioId, nomeCodificado) {
   const lista = document.getElementById("lista-extrato-morador");
   const resumo = document.getElementById("resumo-extrato-morador");
   if (!modal || !lista) {
-    mostrarToast("Abrindo extrato de " + nome);
+    console.error("Modal de extrato não encontrado no DOM:", { modal, lista });
+    mostrarToast("Não foi possível abrir o extrato neste momento.", "alerta");
     return;
   }
 
